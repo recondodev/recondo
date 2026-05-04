@@ -1,0 +1,8 @@
+[toolchain]
+# Pinned to the same version CI runs (see .github/workflows/gateway-ci.yml
+# `RUST_VERSION`). When you bump this, bump CI in the same commit so
+# both stay in sync. Auto-installed by rustup the next time anything
+# under this repo runs `cargo`.
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

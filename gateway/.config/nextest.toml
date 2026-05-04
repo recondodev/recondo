@@ -1,0 +1,31 @@
+# Cap how many test binaries can spawn docker containers in parallel.
+#
+# Each PG/S3 integration binary spawns its own testcontainer via
+# `gateway/tests/common/{pg_container,s3_container}.rs`. Without a
+# cap, nextest may try to start 6+ postgres containers + ministack
+# simultaneously; under that pressure we've observed:
+#
+#   * docker bridge network running out of IPv4 addresses
+#     ("no available IPv4 addresses on this network's address pools"),
+#     a known race in moby's address allocator under concurrent
+#     container creation, even when the pool isn't actually full;
+#   * sluggish migrations because every spawned container is racing
+#     for CPU/IO at the same time.
+#
+# 2 concurrent container-spawning binaries is the empirical sweet
+# spot — wall-clock stays similar to fully-parallel runs while the
+# docker race window is too narrow to hit.
+[test-groups]
+container-spawn = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = '''
+  binary(=attachment_scoping_tests)
+  | binary(=m2_pg_ddl_removal_tests)
+  | binary(=postgres_graph_store_tests)
+  | binary(=orphan_recovery_pg_tests)
+  | binary(=batch11_silent_dup_loss_tests)
+  | binary(=batch12_codex_attachment_tests)
+  | binary(=s3_object_store_tests)
+'''
+test-group = 'container-spawn'

@@ -1,0 +1,85 @@
+# ============================================================================
+# Recondo Helm Chart — Default Values
+# ============================================================================
+
+# -- Gateway configuration --------------------------------------------------
+gateway:
+  replicas: 2
+  image:
+    repository: recondo/gateway
+    # W11 fix: Empty default — deployment template falls back to .Chart.AppVersion.
+    # Override with a specific tag per environment. Never default to "latest".
+    tag: ""
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    annotations: {}
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  service:
+    type: ClusterIP
+    port: 8443
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Operator configuration -------------------------------------------------
+operator:
+  replicas: 1
+  image:
+    repository: recondo/gateway
+    # W11 fix: Empty default — deployment template falls back to .Chart.AppVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# -- Store backend -----------------------------------------------------------
+store:
+  backend: postgres
+
+# -- PostgreSQL connection ---------------------------------------------------
+# W10 fix: Default to empty — the secret.yaml template uses `required` to
+# force an explicit value at deploy time. No plaintext credentials in defaults.
+postgres:
+  uri: ""
+
+# -- Object storage ----------------------------------------------------------
+objects:
+  backend: s3
+  s3Bucket: recondo-artifacts
+  s3Region: us-east-1
+
+# -- TLS configuration -------------------------------------------------------
+tls:
+  caDir: /etc/recondo/ca
+  autoTrust: true
+
+# -- Operator control plane ---------------------------------------------------
+controlPlane:
+  url: "https://api.recondo.ai"
+
+# -- Secrets (injected via values override or external secrets manager) -------
+secrets:
+  operatorToken: ""
+  postgresPassword: ""
+
+# -- Autoscaling --------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilization: 70
+
+# -- Pod Disruption Budget ----------------------------------------------------
+pdb:
+  minAvailable: 1

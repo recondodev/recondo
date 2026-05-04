@@ -1,0 +1,9 @@
+apiVersion: v2
+name: recondo
+description: Recondo AI Governance Gateway - compliance auditing for agent-to-LLM traffic
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Recondo
+    url: https://recondo.ai

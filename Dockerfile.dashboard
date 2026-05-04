@@ -1,0 +1,47 @@
+# Stage 1: Build static files
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Install any corporate CA certificates dropped into docker/ca-certs/.
+# No-op if the directory contains only .gitkeep / README.md.
+COPY docker/ca-certs/ /tmp/recondo-ca-certs/
+RUN set -eu; \
+    mkdir -p /etc/ssl/recondo; \
+    : > /etc/ssl/recondo/bundle.pem; \
+    for f in /tmp/recondo-ca-certs/*.pem /tmp/recondo-ca-certs/*.crt; do \
+        [ -f "$f" ] || continue; \
+        cat "$f" >> /etc/ssl/recondo/bundle.pem; \
+        echo "" >> /etc/ssl/recondo/bundle.pem; \
+    done; \
+    rm -rf /tmp/recondo-ca-certs; \
+    if [ -s /etc/ssl/recondo/bundle.pem ]; then echo "Installed corporate CA certificates"; fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/recondo/bundle.pem
+
+COPY dashboard/package.json dashboard/package-lock.json* ./
+RUN npm install
+
+COPY dashboard/ ./
+
+# API URL is baked in at build time via Vite env
+ARG VITE_API_URL=http://localhost:4000
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN npm run build
+
+# Stage 2: Serve with nginx
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# SPA routing: all paths serve index.html (let React Router handle it)
+RUN echo 'server { \
+    listen 80; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

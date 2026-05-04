@@ -1,0 +1,115 @@
+# ============================================================================
+# Stage 1: Builder — compile the gateway binary on Amazon Linux 2023
+# ============================================================================
+FROM amazonlinux:2023 AS builder
+
+# Install build dependencies + Rust via rustup
+RUN dnf install -y gcc gcc-c++ make openssl-devel pkg-config && \
+    dnf clean all
+
+# Install any corporate CA certificates dropped into docker/ca-certs/.
+# No-op if the directory contains only .gitkeep / README.md.
+COPY docker/ca-certs/ /tmp/recondo-ca-certs/
+RUN set -eu; \
+    found=$(ls /tmp/recondo-ca-certs/*.pem /tmp/recondo-ca-certs/*.crt 2>/dev/null || true); \
+    if [ -n "$found" ]; then \
+        cp /tmp/recondo-ca-certs/*.pem /etc/pki/ca-trust/source/anchors/ 2>/dev/null || true; \
+        cp /tmp/recondo-ca-certs/*.crt /etc/pki/ca-trust/source/anchors/ 2>/dev/null || true; \
+        update-ca-trust; \
+        echo "Installed corporate CA certificates"; \
+    fi; \
+    rm -rf /tmp/recondo-ca-certs
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain 1.94.0
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /usr/src/recondo
+
+# Copy manifests first for layer caching. The workspace Cargo.toml +
+# Cargo.lock live at the repo root; both workspace members (gateway and
+# xtask) have their own per-crate Cargo.toml. Cargo requires every
+# workspace member's manifest + source to resolve the workspace, even
+# when only one crate is being built.
+COPY Cargo.toml Cargo.lock ./
+COPY gateway/Cargo.toml ./gateway/
+COPY xtask/Cargo.toml ./xtask/
+
+# Copy source for both workspace members
+COPY gateway/src ./gateway/src
+COPY xtask/src ./xtask/src
+
+# FIND-4-A: gateway/src/session/mod.rs uses `include_str!("../../../shared/placeholder-prefixes.json")`
+# at compile time. The `include_str!` macro resolves paths relative to
+# the source file, so the JSON must live at <repo>/shared/...
+# alongside the gateway/ source tree inside the build container.
+COPY shared ./shared
+
+# Batch 5 (H4): gateway/src/db/model_pricing.rs uses
+# `include_str!("../../../compliance/model-pricing.toml")` to bake the
+# canonical cost-rate table into the binary. Same reasoning as `shared/`.
+COPY compliance ./compliance
+
+# Build release binary with S3 + PostgreSQL support. Run from the
+# workspace root and target the gateway package explicitly.
+RUN cargo build --release --features s3,postgres --bin recondo-gateway -p recondo-gateway
+
+# ============================================================================
+# Stage 2: Runtime — minimal Amazon Linux 2023 with just the binary
+# ============================================================================
+FROM amazonlinux:2023
+
+RUN dnf install -y shadow-utils && \
+    dnf clean all
+
+# Create non-root user for running the gateway
+RUN useradd --create-home --shell /bin/bash recondo
+
+# Copy the compiled binary from the builder stage
+COPY --from=builder /usr/src/recondo/target/release/recondo-gateway /usr/local/bin/recondo-gateway
+
+# Create data directories
+RUN mkdir -p /home/recondo/.recondo/ca \
+             /home/recondo/.recondo/objects/req \
+             /home/recondo/.recondo/objects/resp \
+             /home/recondo/.recondo/captures \
+             /home/recondo/.recondo/wal && \
+    chown -R recondo:recondo /home/recondo/.recondo
+
+# Bake any corporate CA certs into the data dir so the gateway's rustls-based
+# upstream TLS client trusts them at runtime. The Rust client uses webpki_roots
+# only -- it does NOT read the system trust store -- so the update-ca-trust
+# step earlier (which helps curl, etc.) is not enough on its own. The gateway's
+# load_extra_ca_certs reads every .pem / .crt in /home/recondo/.recondo/ca/
+# (skipping its own ca.crt / ca.key). Conditional copy: a no-op when only
+# .gitkeep / README.md are present.
+COPY docker/ca-certs/ /tmp/recondo-ca-certs/
+RUN set -eu; \
+    found=$(ls /tmp/recondo-ca-certs/*.pem /tmp/recondo-ca-certs/*.crt 2>/dev/null || true); \
+    if [ -n "$found" ]; then \
+        cp /tmp/recondo-ca-certs/*.pem /home/recondo/.recondo/ca/ 2>/dev/null || true; \
+        cp /tmp/recondo-ca-certs/*.crt /home/recondo/.recondo/ca/ 2>/dev/null || true; \
+        chown -R recondo:recondo /home/recondo/.recondo/ca; \
+        echo "Installed corporate CA certificates into gateway data dir"; \
+    fi; \
+    rm -rf /tmp/recondo-ca-certs
+
+USER recondo
+WORKDIR /home/recondo
+
+# Gateway listens on port 8443 for CONNECT tunnels and direct TLS
+EXPOSE 8443
+
+# Health check endpoint
+# AL2023 ships with curl-minimal
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:8443/healthz || exit 1
+
+# Configurable via environment variables:
+#   RECONDO_STORE     — "sqlite" or "postgres"
+#   RECONDO_DB_URL    — PostgreSQL connection URI
+#   RECONDO_OBJECTS   — "local" or "s3"
+#   RECONDO_S3_BUCKET — S3 bucket name
+
+ENTRYPOINT ["recondo-gateway"]
+CMD ["serve"]

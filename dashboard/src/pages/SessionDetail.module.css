@@ -1,0 +1,376 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.pageHeader {
+  margin-bottom: 16px;
+}
+
+.headerActions {
+  gap: 12px;
+}
+
+.sessionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exportButton:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.valueMuted {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.turnToolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.turnToggle {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.turnToggle:hover {
+  border-color: var(--text-dim);
+}
+
+.turnColumns {
+  display: grid;
+  grid-template-columns: 50px 100px 90px minmax(0, 1fr) 90px 80px 70px 80px;
+  gap: 8px;
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+div.turnRow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+div.turnRow:hover {
+  border-color: var(--accent);
+}
+
+button.turnTrigger,
+div.turnTrigger {
+  display: grid;
+  grid-template-columns: 50px 100px 90px minmax(0, 1fr) 90px 80px 70px 80px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+div.turnContent {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.turnCell {
+  min-width: 0;
+}
+
+.sequenceCell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #fff;
+}
+
+.sequenceMarker {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.monoCell {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono",
+    "Consolas", monospace;
+  font-size: 11px;
+}
+
+.requestCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.costCell {
+  color: #fff;
+  font-weight: 600;
+}
+
+.statusCell {
+  display: flex;
+  align-items: center;
+}
+
+.turnSection {
+  margin-top: 12px;
+}
+
+.subCallRow {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.subCallTrigger {
+  display: grid;
+  grid-template-columns: 90px 110px minmax(0, 1fr) 80px 70px 70px 80px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.subCallTrigger:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.subCallContent {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.subCallIndex {
+  color: var(--text-dim);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono",
+    "Consolas", monospace;
+  font-size: 11px;
+}
+
+.subCallModel {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono",
+    "Consolas", monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subCallSummary {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.subCallMetric {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono",
+    "Consolas", monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.subCallCost {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono",
+    "Consolas", monospace;
+  font-size: 11px;
+  color: #fff;
+  text-align: right;
+  font-weight: 600;
+}
+
+.turnSectionTitle {
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.turnSectionAttachments {
+  margin-top: 10px;
+}
+
+.turnSectionSubtitle {
+  margin-bottom: 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.turnText {
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.hashGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailMetric {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.detailLabel {
+  margin-bottom: 2px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.detailValue {
+  color: #fff;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.captureComplete {
+  color: var(--green);
+}
+
+.captureIncomplete {
+  color: var(--red);
+}
+
+.capturePreflight {
+  color: #888;
+}
+
+/* Inline label rendered in the user-request cell when the row is a preflight
+ * (Claude Code's quota probe — max_tokens=1, output_tokens<=1, stop=max_tokens).
+ * Dimmed + italic so it's visually distinct from real user messages. */
+.preflightLabel {
+  color: #888;
+  font-style: italic;
+}
+
+.paginationWrap {
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .turnColumns {
+    display: none;
+  }
+
+  button.turnTrigger,
+  div.turnTrigger {
+    grid-template-columns: 44px minmax(0, 1fr) 88px;
+    grid-template-areas:
+      "sequence request status"
+      "time model model"
+      "tokens cost latency";
+    row-gap: 6px;
+  }
+
+  .sequenceCell {
+    grid-area: sequence;
+  }
+
+  .timeCell {
+    grid-area: time;
+  }
+
+  .modelCell {
+    grid-area: model;
+  }
+
+  .requestCell {
+    grid-area: request;
+  }
+
+  .tokensCell {
+    grid-area: tokens;
+  }
+
+  .costCell {
+    grid-area: cost;
+  }
+
+  .latencyCell {
+    grid-area: latency;
+  }
+
+  .statusCell {
+    grid-area: status;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .pageHeader {
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .detailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hashGrid {
+    grid-template-columns: 1fr;
+  }
+}

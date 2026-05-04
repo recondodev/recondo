@@ -1,0 +1,12 @@
+{
+  "_comment": "FIND-3-TS-3: Single source of truth for attachment-sibling placeholder prefixes. Consumed by gateway/src/session/mod.rs (Rust include_str! + OnceLock), gateway/src/capture/attachments.rs, and api/src/placeholder-mask.ts. Adding a prefix here updates both Rust and TypeScript consumers without a drift test. Removing a prefix must be done in a coordinated release so no raw placeholders leak through.",
+  "_usage": "prefixes MUST start with '[' and end with ':'. Matching semantics: text must start_with(prefix), contain('source:'), end_with(']'), and not contain('\\n').",
+  "prefixes": [
+    "[Image:",
+    "[PDF:",
+    "[Document:",
+    "[File:",
+    "[Attachment:"
+  ],
+  "replacement": "[attachment]"
+}

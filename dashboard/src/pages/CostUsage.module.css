@@ -1,0 +1,44 @@
+.barSection {
+  padding: 8px 0;
+}
+
+.dailyChart {
+  height: 120px;
+  padding-top: 12px;
+}
+
+.dailyBarAccent {
+  background: var(--accent);
+}
+
+.dailyBarCurrent {
+  background: var(--green);
+}
+
+.projectionsTable {
+  width: 100%;
+}
+
+.projectionMonth {
+  color: #fff;
+  font-weight: 600;
+}
+
+.projectionCost {
+  color: #fff;
+  font-weight: 700;
+}
+
+.projectionDeltaUp {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.projectionDeltaDown {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.assumptionsCell {
+  color: var(--text-dim);
+}

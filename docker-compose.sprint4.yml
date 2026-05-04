@@ -1,0 +1,52 @@
+name: recondo
+
+services:
+  recondo-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    command: ["serve"]
+    ports:
+      - "8443:8443"
+    environment:
+      RECONDO_STORE: postgres
+      RECONDO_DB_URL: postgres://recondo:recondo_dev@postgres:5432/recondo
+      RECONDO_OBJECTS: local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # NOTE: The operator subcommand is a Sprint 5 placeholder that exits immediately.
+  # Uncomment when operator logic is implemented in Sprint 5.
+  # recondo-operator:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.gateway
+  #   command: ["operator"]
+  #   environment:
+  #     RECONDO_CONTROL_PLANE: http://host.docker.internal:3000
+  #     RECONDO_TOKEN: ${RECONDO_TOKEN:-dev-token}
+  #     RECONDO_GATEWAY_SERVICE: recondo-gateway
+  #   depends_on:
+  #     recondo-gateway:
+  #       condition: service_started
+
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: recondo
+      POSTGRES_USER: recondo
+      POSTGRES_PASSWORD: recondo_dev
+    volumes:
+      - postgres_sprint4_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recondo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_sprint4_data:

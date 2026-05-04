@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    app.kubernetes.io/name: recondo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  # LLM provider domains for host classification
+  providers: "anthropic,openai,google"
+  # Object storage backend
+  objects-backend: {{ .Values.objects.backend | quote }}
+  # S3 bucket for object storage
+  s3-bucket: {{ .Values.objects.s3Bucket | quote }}
+  # S3 region
+  s3-region: {{ .Values.objects.s3Region | quote }}
+  # TLS CA directory
+  tls-ca-dir: {{ .Values.tls.caDir | quote }}
+  # Auto-trust generated CA
+  tls-auto-trust: {{ .Values.tls.autoTrust | quote }}

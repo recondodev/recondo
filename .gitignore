@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# JetBrains IDEs
+.idea/
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+dist/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+build/
+*.log
+gateway/target/
+target/
+
+# Corporate CA certs for Docker builds (see docker/ca-certs/README.md)
+docker/ca-certs/*.pem
+docker/ca-certs/*.crt
+
+# Playwright MCP scratch output (snapshots, notes from interactive sessions)
+.playwright-mcp/
+
+# Verification screenshots dropped at the repo root by Playwright runs
+/*.png
+
+# Claude Code runtime scratch (session locks, scheduled-task state)
+.claude/

@@ -1,0 +1,271 @@
+# Recondo canonical model pricing table (Batch 5 H4).
+#
+# This is the production source of truth for `compute_cost_usd`. The gateway
+# embeds this file at compile time via `include_str!` and parses it once into
+# a `PricingTable`. The table drives cost computation across all providers.
+#
+# Schema:
+#   prefix              — model-name prefix (longest-prefix-match wins).
+#   effective_from      — RFC3339 UTC timestamp; rates apply at-or-after.
+#   input_per_m         — USD per million input tokens.
+#   output_per_m        — USD per million output tokens.
+#   cache_create_per_m  — USD per million cache-creation tokens (ABSOLUTE,
+#                         not a multiplier; 0 for providers without the
+#                         concept, e.g. OpenAI / Gemini).
+#   cache_read_per_m    — USD per million cache-read tokens (ABSOLUTE).
+#
+# Optional [[pricing.tiers]] entries override base input/output rates when
+# `input_tokens > threshold_input_tokens`. The matching tier with the highest
+# threshold wins.
+#
+# Cache-rate semantics encoded as absolutes (per audit H4):
+#   Anthropic: cache_create = input × 1.25 ; cache_read = input × 0.10
+#   Gemini:    cache_create = 0           ; cache_read = input × 0.25
+#   OpenAI:    cache_create = 0           ; cache_read = input × 0.50
+#
+# `effective_from = "2024-01-01T00:00:00Z"` is uniform across all current
+# entries — these rates apply to every captured turn in the system to date.
+# Future rate changes add new rows with later `effective_from` rather than
+# editing existing ones.
+
+# ---------------------------------------------------------------------------
+# Anthropic — Claude
+# ---------------------------------------------------------------------------
+
+[[pricing]]
+prefix = "claude-opus-4-6"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 5.0
+output_per_m = 25.0
+cache_create_per_m = 6.25
+cache_read_per_m = 0.50
+
+[[pricing]]
+prefix = "claude-opus-4-5"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 5.0
+output_per_m = 25.0
+cache_create_per_m = 6.25
+cache_read_per_m = 0.50
+
+[[pricing]]
+prefix = "claude-opus-4"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 15.0
+output_per_m = 75.0
+cache_create_per_m = 18.75
+cache_read_per_m = 1.50
+
+[[pricing]]
+prefix = "claude-3-opus"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 15.0
+output_per_m = 75.0
+cache_create_per_m = 18.75
+cache_read_per_m = 1.50
+
+[[pricing]]
+prefix = "claude-sonnet-4"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 3.0
+output_per_m = 15.0
+cache_create_per_m = 3.75
+cache_read_per_m = 0.30
+
+[[pricing]]
+prefix = "claude-3-5-sonnet"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 3.0
+output_per_m = 15.0
+cache_create_per_m = 3.75
+cache_read_per_m = 0.30
+
+[[pricing]]
+prefix = "claude-3.5-sonnet"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 3.0
+output_per_m = 15.0
+cache_create_per_m = 3.75
+cache_read_per_m = 0.30
+
+[[pricing]]
+prefix = "claude-3-sonnet"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 3.0
+output_per_m = 15.0
+cache_create_per_m = 3.75
+cache_read_per_m = 0.30
+
+[[pricing]]
+prefix = "claude-haiku-4"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 1.0
+output_per_m = 5.0
+cache_create_per_m = 1.25
+cache_read_per_m = 0.10
+
+[[pricing]]
+prefix = "claude-3-5-haiku"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.80
+output_per_m = 4.0
+cache_create_per_m = 1.00
+cache_read_per_m = 0.08
+
+[[pricing]]
+prefix = "claude-3.5-haiku"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.80
+output_per_m = 4.0
+cache_create_per_m = 1.00
+cache_read_per_m = 0.08
+
+[[pricing]]
+prefix = "claude-3-haiku"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.80
+output_per_m = 4.0
+cache_create_per_m = 1.00
+cache_read_per_m = 0.08
+
+# Defensive fallback for `claude-haiku` without a version suffix. Mirrors
+# the pre-H4 if-else chain's behavior ($0.80/$4.00) for any haiku model
+# whose name lacks a `-N` version. Longest-prefix-match means
+# `claude-haiku-4` (and any future versioned haiku row) shadows this entry
+# automatically. Removing this row would be a behavior change.
+[[pricing]]
+prefix = "claude-haiku"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.80
+output_per_m = 4.0
+cache_create_per_m = 1.00
+cache_read_per_m = 0.08
+
+# ---------------------------------------------------------------------------
+# OpenAI — GPT / o-series
+# ---------------------------------------------------------------------------
+
+[[pricing]]
+prefix = "gpt-4o-mini"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.15
+output_per_m = 0.60
+cache_create_per_m = 0.0
+cache_read_per_m = 0.075
+
+[[pricing]]
+prefix = "gpt-4o"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 2.50
+output_per_m = 10.0
+cache_create_per_m = 0.0
+cache_read_per_m = 1.25
+
+[[pricing]]
+prefix = "o1-mini"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 3.0
+output_per_m = 12.0
+cache_create_per_m = 0.0
+cache_read_per_m = 1.50
+
+[[pricing]]
+prefix = "o3-mini"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 1.10
+output_per_m = 4.40
+cache_create_per_m = 0.0
+cache_read_per_m = 0.55
+
+[[pricing]]
+prefix = "o3"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 10.0
+output_per_m = 40.0
+cache_create_per_m = 0.0
+cache_read_per_m = 5.00
+
+[[pricing]]
+prefix = "o1-preview"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 15.0
+output_per_m = 60.0
+cache_create_per_m = 0.0
+cache_read_per_m = 7.50
+
+[[pricing]]
+prefix = "o1"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 15.0
+output_per_m = 60.0
+cache_create_per_m = 0.0
+cache_read_per_m = 7.50
+
+[[pricing]]
+prefix = "gpt-4-turbo"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 10.0
+output_per_m = 30.0
+cache_create_per_m = 0.0
+cache_read_per_m = 5.00
+
+[[pricing]]
+prefix = "gpt-4"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 30.0
+output_per_m = 60.0
+cache_create_per_m = 0.0
+cache_read_per_m = 15.00
+
+# ---------------------------------------------------------------------------
+# Google — Gemini
+# ---------------------------------------------------------------------------
+
+[[pricing]]
+prefix = "gemini-2.5-flash-lite"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.075
+output_per_m = 0.30
+cache_create_per_m = 0.0
+cache_read_per_m = 0.01875
+
+[[pricing]]
+prefix = "gemini-2.5-flash"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.15
+output_per_m = 0.60
+cache_create_per_m = 0.0
+cache_read_per_m = 0.0375
+
+[[pricing]]
+prefix = "gemini-2.5-pro"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 1.25
+output_per_m = 10.0
+cache_create_per_m = 0.0
+cache_read_per_m = 0.3125
+
+[[pricing.tiers]]
+threshold_input_tokens = 200000
+input_per_m = 2.5
+output_per_m = 15.0
+
+# NOTE: gemini-3-flash and gemini-3-pro rates are not yet published by
+# Google. These rows mirror gemini-2.5-flash and gemini-2.5-pro respectively
+# as a placeholder. Replace with official rates when published. (Originally
+# cited as the G-W2 fix in the pre-H4 if-else chain.)
+[[pricing]]
+prefix = "gemini-3-flash"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 0.15
+output_per_m = 0.60
+cache_create_per_m = 0.0
+cache_read_per_m = 0.0375
+
+[[pricing]]
+prefix = "gemini-3-pro"
+effective_from = "2024-01-01T00:00:00Z"
+input_per_m = 1.25
+output_per_m = 10.0
+cache_create_per_m = 0.0
+cache_read_per_m = 0.3125

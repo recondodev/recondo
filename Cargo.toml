@@ -1,0 +1,18 @@
+[workspace]
+members = ["gateway", "xtask"]
+resolver = "2"
+
+# Centralized lint configuration. Member crates opt in with:
+#   [lints]
+#   workspace = true
+[workspace.lints.rust]
+warnings = "deny"
+
+# Halves debug-info size and link-time peak RSS. Backtraces stay readable
+# (file:line preserved); only variable inspection in a debugger is lost.
+# Required to keep CI link steps under the 16 GB ubuntu-latest ceiling —
+# default debug=2 + parallel rust-lld OOMs with SIGBUS on large test
+# binaries (aws-sdk-s3 + aws-lc-sys + rustls + tokio-postgres).
+[profile.dev]
+debug = 1
+split-debuginfo = "unpacked"

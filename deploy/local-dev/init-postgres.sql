@@ -1,0 +1,10 @@
+-- PostgreSQL one-time initialization for the recondo database.
+--
+-- Tables are NOT created here. The schema is owned entirely by
+-- api/migrations/ (node-pg-migrate). Run `just api-migrate` after
+-- starting dev-infra to apply all migrations.
+--
+-- This file runs only once on a fresh empty volume (postgres
+-- /docker-entrypoint-initdb.d/ convention). Putting DDL here conflicts
+-- with node-pg-migrate because the tables already exist when migrations
+-- run, making CREATE TABLE IF NOT EXISTS silently skip the correct schema.

@@ -1,0 +1,58 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Install any corporate CA certificates dropped into docker/ca-certs/.
+# No-op if the directory contains only .gitkeep / README.md.
+COPY docker/ca-certs/ /tmp/recondo-ca-certs/
+RUN set -eu; \
+    mkdir -p /etc/ssl/recondo; \
+    : > /etc/ssl/recondo/bundle.pem; \
+    for f in /tmp/recondo-ca-certs/*.pem /tmp/recondo-ca-certs/*.crt; do \
+        [ -f "$f" ] || continue; \
+        cat "$f" >> /etc/ssl/recondo/bundle.pem; \
+        echo "" >> /etc/ssl/recondo/bundle.pem; \
+    done; \
+    rm -rf /tmp/recondo-ca-certs; \
+    if [ -s /etc/ssl/recondo/bundle.pem ]; then echo "Installed corporate CA certificates"; fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/recondo/bundle.pem
+
+# Copy manifests first for layer caching
+COPY api/package.json api/package-lock.json* ./
+
+RUN npm install
+
+# Copy application source
+COPY api/src ./src
+COPY api/tsconfig.json ./
+
+# Copy migration files (single source of truth for PostgreSQL schema)
+COPY api/migrations ./migrations
+
+# FIND-4-A: shared/placeholder-prefixes.json is the canonical allow-list
+# both the Rust gateway (via include_str!) and TypeScript API (via
+# loadSharedJson) consume. The TS module reads the file at import-time;
+# without this COPY, the API container fails to start with
+# "shared/placeholder-prefixes.json not found in any expected location".
+# The compiled layout is /app/dist/src/placeholder-mask.js — its
+# `__dirname/../../shared/...` candidate resolves to /app/shared/...
+# which this COPY populates.
+COPY shared ./shared
+
+# FIND-6-D: compile TypeScript to /app/dist/ at build time so the
+# image ships a production-ready JS bundle — not a live-tsx runtime.
+# `tsx` is a devDep and the runtime compile step was non-standard
+# for production: slower first response, larger attack surface,
+# dependency on dev tooling in prod. `npm run build` invokes `tsc`
+# against `tsconfig.json` with `outDir: dist` and `rootDir: .` so
+# the source tree layout (`src/...`) is preserved under `dist/`.
+RUN npm run build
+
+EXPOSE 4000
+
+# FIND-6-D: run the compiled bundle, not tsx. The compiled
+# `placeholder-mask.js` lives at /app/dist/src/placeholder-mask.js;
+# its `__dirname/../../shared/...` candidate resolves to
+# /app/shared/placeholder-prefixes.json (already covered by the
+# loader's third candidate path).
+CMD ["node", "dist/src/index.js"]

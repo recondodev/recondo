@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recondo - AI Governance Gateway</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --surface: #111620;
+    --surface2: #181d28;
+    --border: #232a38;
+    --text: #c5cdd9;
+    --text-dim: #6b7a90;
+    --accent: #3b82f6;
+    --accent-dim: #1e3a5f;
+    --green: #22c55e;
+    --green-dim: #0a3d1f;
+    --red: #ef4444;
+    --red-dim: #3d1414;
+    --yellow: #eab308;
+    --yellow-dim: #3d3408;
+    --orange: #f97316;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --sidebar-w: 220px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; background: var(--bg); color: var(--text); display:flex; min-height:100vh; font-size:13px; }
+
+  /* Sidebar */
+  .sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); padding: 20px 0; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .logo h1 { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 2px; }
+  .logo .tag { font-size: 10px; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
+  .nav-section { padding: 8px 20px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); }
+  .nav-item { display:flex; align-items:center; gap:10px; padding: 8px 20px; cursor:pointer; color: var(--text-dim); transition: all 0.15s; font-size:13px; }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: #fff; background: var(--accent-dim); border-right: 2px solid var(--accent); }
+  .nav-item .dot { width:6px; height:6px; border-radius:50%; }
+  .nav-item .badge { margin-left:auto; background: var(--accent-dim); color: var(--accent); padding: 1px 6px; border-radius: 8px; font-size:11px; }
+
+  /* Main */
+  .main { margin-left: var(--sidebar-w); flex:1; padding: 24px 32px; }
+  .page { display:none; }
+  .page.active { display:block; }
+
+  /* Header bar */
+  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .header h2 { font-size:20px; font-weight:600; color:#fff; }
+  .header-meta { display:flex; gap:16px; align-items:center; }
+  .status-pill { display:flex; align-items:center; gap:6px; padding: 4px 12px; border-radius: 12px; font-size:11px; }
+  .status-pill.live { background: var(--green-dim); color: var(--green); }
+  .status-pill.warn { background: var(--yellow-dim); color: var(--yellow); }
+  .pulse { width:8px; height:8px; border-radius:50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Cards */
+  .cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card-label { font-size:11px; color: var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .card-value { font-size:24px; font-weight:700; color:#fff; }
+  .card-sub { font-size:11px; color: var(--text-dim); margin-top:4px; }
+  .card-delta { font-size:11px; margin-top:4px; }
+  .card-delta.up { color: var(--green); }
+  .card-delta.down { color: var(--red); }
+
+  /* Tables */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow:hidden; margin-bottom:24px; }
+  .table-header { display:flex; justify-content:space-between; align-items:center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .table-header h3 { font-size:14px; color:#fff; font-weight:600; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; padding:10px 16px; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); border-bottom:1px solid var(--border); font-weight:500; }
+  td { padding:10px 16px; border-bottom:1px solid var(--border); font-size:12px; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background: var(--surface2); }
+  .mono { font-family: inherit; color: var(--text-dim); }
+  .tag-pill { display:inline-block; padding: 2px 8px; border-radius: 4px; font-size:11px; font-weight:500; }
+  .tag-anthropic { background: #2d1f4e; color: #c4a5f7; }
+  .tag-openai { background: #1a3326; color: #6ee7b7; }
+  .tag-gemini { background: #332d1a; color: #fcd34d; }
+  .tag-ok { background: var(--green-dim); color: var(--green); }
+  .tag-warn { background: var(--yellow-dim); color: var(--yellow); }
+  .tag-fail { background: var(--red-dim); color: var(--red); }
+  .tag-info { background: var(--accent-dim); color: var(--accent); }
+  .tag-purple { background: #2d1f4e; color: var(--purple); }
+
+  /* Chart placeholder */
+  .chart-box { background: var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:24px; }
+  .chart-box h3 { font-size:14px; color:#fff; margin-bottom:16px; font-weight:600; }
+  .bar-chart { display:flex; align-items:flex-end; gap:6px; height:140px; padding-top:20px; }
+  .bar-group { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .bar { width:100%; border-radius:3px 3px 0 0; min-height:2px; transition: height 0.3s; }
+  .bar-label { font-size:10px; color:var(--text-dim); }
+  .bar-val { font-size:10px; color:var(--text-dim); }
+  .legend { display:flex; gap:16px; margin-top:12px; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-dim); }
+  .legend-dot { width:8px; height:8px; border-radius:2px; }
+
+  /* Compliance */
+  .compliance-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; margin-bottom:24px; }
+  .compliance-card { background: var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; }
+  .compliance-card h3 { font-size:14px; color:#fff; margin-bottom:4px; }
+  .compliance-card .sub { font-size:11px; color:var(--text-dim); margin-bottom:16px; }
+  .progress-bar { height:6px; background:var(--border); border-radius:3px; overflow:hidden; margin-bottom:8px; }
+  .progress-fill { height:100%; border-radius:3px; transition: width 0.5s; }
+  .checklist { list-style:none; }
+  .checklist li { padding: 6px 0; font-size:12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); }
+  .checklist li:last-child { border-bottom:none; }
+  .check { color: var(--green); }
+  .cross { color: var(--red); }
+  .pending { color: var(--yellow); }
+
+  /* Filter bar */
+  .filters { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .filter-btn { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:11px; font-family:inherit; }
+  .filter-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+  .filter-btn:hover { border-color:var(--text-dim); }
+  .search-input { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:inherit; width:260px; }
+  .search-input::placeholder { color:var(--text-dim); }
+
+  /* Live feed */
+  .feed { background: var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .feed-header { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .feed-header h3 { font-size:14px; color:#fff; }
+  .feed-item { display:grid; grid-template-columns: 90px 70px 80px 1fr 80px 80px 60px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:12px; align-items:center; }
+  .feed-item:last-child { border-bottom:none; }
+  .feed-item.new { animation: fadeIn 0.5s; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .feed-cols { display:grid; grid-template-columns: 90px 70px 80px 1fr 80px 80px 60px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); }
+
+  /* Cost chart bars */
+  .cost-row { display:flex; align-items:center; gap:12px; padding:8px 0; }
+  .cost-label { width:100px; font-size:12px; color:var(--text-dim); }
+  .cost-bar-wrap { flex:1; height:20px; background:var(--surface2); border-radius:4px; overflow:hidden; position:relative; }
+  .cost-bar-fill { height:100%; border-radius:4px; display:flex; align-items:center; padding-left:8px; font-size:10px; color:#fff; font-weight:600; }
+  .cost-amount { width:80px; text-align:right; font-size:12px; color:#fff; font-weight:600; }
+
+  /* Two column layout */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+  @media (max-width:1100px) { .two-col { grid-template-columns:1fr; } }
+
+  /* Scrollable region */
+  .scroll-y { max-height:400px; overflow-y:auto; }
+
+  /* Timeline */
+  .timeline-item { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
+  .timeline-time { width:70px; flex-shrink:0; font-size:11px; color:var(--text-dim); }
+  .timeline-content { flex:1; }
+  .timeline-title { font-size:12px; color:#fff; margin-bottom:2px; }
+  .timeline-desc { font-size:11px; color:var(--text-dim); }
+
+  /* Export button */
+  .btn { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); cursor:pointer; font-size:11px; font-family:inherit; }
+  .btn:hover { border-color:var(--text-dim); }
+  .btn-primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-primary:hover { opacity:0.9; }
+
+  /* Donut chart */
+  .donut-wrap { display:flex; align-items:center; gap:24px; }
+  .donut { width:120px; height:120px; border-radius:50%; position:relative; }
+  .donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+  .donut-center .val { font-size:20px; font-weight:700; color:#fff; }
+  .donut-center .lbl { font-size:10px; color:var(--text-dim); }
+  .donut-legend { list-style:none; }
+  .donut-legend li { display:flex; align-items:center; gap:8px; padding:3px 0; font-size:12px; }
+
+  /* Session detail */
+  .session-detail { display:none; }
+  .session-detail.active { display:block; }
+  .session-list.hidden { display:none; }
+  .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--accent); cursor:pointer; font-size:12px; margin-bottom:16px; }
+  .back-link:hover { text-decoration:underline; }
+  .session-meta-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
+  .meta-item { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; }
+  .meta-item .label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:4px; }
+  .meta-item .value { font-size:14px; color:#fff; font-weight:600; word-break:break-all; }
+  .meta-item .value.sm { font-size:12px; font-weight:400; }
+  .turn-row { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; overflow:hidden; transition: border-color 0.15s; }
+  .turn-row:hover { border-color: var(--accent); }
+  .turn-header { display:grid; grid-template-columns:50px 100px 90px 1fr 90px 80px 70px 80px; padding:10px 16px; align-items:center; font-size:12px; gap:8px; }
+  .turn-body { display:none; padding:0 16px 16px; border-top:1px solid var(--border); }
+  .turn-body.open { display:block; }
+  .turn-section { margin-top:12px; }
+  .turn-section-title { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; }
+  .turn-text { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:10px 12px; font-size:12px; line-height:1.6; color:var(--text); white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+  .turn-hashes { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .hash-box { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; }
+  .hash-box .hl { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:2px; }
+  .hash-box .hv { font-size:11px; color:var(--text); word-break:break-all; }
+  .pagination { display:flex; justify-content:center; align-items:center; gap:8px; margin-top:16px; }
+  .page-btn { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:12px; font-family:inherit; }
+  .page-btn:hover { border-color:var(--text-dim); }
+  .page-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+  .page-btn:disabled { opacity:0.3; cursor:default; }
+  .page-info { font-size:11px; color:var(--text-dim); }
+  .turn-cols { display:grid; grid-template-columns:50px 100px 90px 1fr 90px 80px 70px 80px; padding:8px 16px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); gap:8px; }
+  .token-bar { display:flex; gap:2px; height:14px; border-radius:3px; overflow:hidden; }
+  .token-bar > div { height:100%; border-radius:0; }
+  .tb-input { background:var(--accent); }
+  .tb-output { background:var(--green); }
+  .tb-cache { background:var(--yellow); opacity:0.6; }
+  .session-row { cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="logo">
+    <h1>RECONDO</h1>
+    <div class="tag">AI GOVERNANCE GATEWAY</div>
+  </div>
+
+  <div class="nav-section">Monitor</div>
+  <div class="nav-item active" data-page="realtime">
+    <div class="dot" style="background:var(--green)"></div>
+    Realtime Feed
+  </div>
+  <div class="nav-item" data-page="sessions">
+    <div class="dot" style="background:var(--accent)"></div>
+    Sessions
+    <span class="badge">47</span>
+  </div>
+
+  <div class="nav-section">Audit</div>
+  <div class="nav-item" data-page="audit">
+    <div class="dot" style="background:var(--purple)"></div>
+    Audit Trail
+  </div>
+  <div class="nav-item" data-page="compliance">
+    <div class="dot" style="background:var(--cyan)"></div>
+    Compliance
+  </div>
+  <div class="nav-item" data-page="reports">
+    <div class="dot" style="background:var(--orange)"></div>
+    Audit Reports
+  </div>
+
+  <div class="nav-section">Intelligence</div>
+  <div class="nav-item" data-page="cost">
+    <div class="dot" style="background:var(--yellow)"></div>
+    Cost & Usage
+  </div>
+  <div class="nav-item" data-page="agents">
+    <div class="dot" style="background:var(--green)"></div>
+    Agent Analytics
+  </div>
+
+  <div class="nav-section">Settings</div>
+  <div class="nav-item" data-page="policies">
+    <div class="dot" style="background:var(--text-dim)"></div>
+    Policies
+  </div>
+  <div class="nav-item" data-page="keys">
+    <div class="dot" style="background:var(--text-dim)"></div>
+    API Keys
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main">
+
+<!-- ========== REALTIME FEED ========== -->
+<div class="page active" id="page-realtime">
+  <div class="header">
+    <h2>Realtime Monitor</h2>
+    <div class="header-meta">
+      <div class="status-pill live"><div class="pulse"></div> Gateway Live</div>
+      <span style="color:var(--text-dim);font-size:12px">:8443 | 3 providers | 12 agents connected</span>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Requests / min</div>
+      <div class="card-value">34</div>
+      <div class="card-delta up">+12% vs last hour</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Active Sessions</div>
+      <div class="card-value">12</div>
+      <div class="card-sub">across 3 providers</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tokens (last hour)</div>
+      <div class="card-value">2.4M</div>
+      <div class="card-delta down">840K cache-read</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cost (last hour)</div>
+      <div class="card-value">$18.42</div>
+      <div class="card-delta up">$312 projected today</div>
+    </div>
+    <div class="card">
+      <div class="card-label">P50 Latency</div>
+      <div class="card-value">1.2s</div>
+      <div class="card-sub">P99: 4.8s (gateway overhead: &lt;2ms)</div>
+    </div>
+  </div>
+
+  <div class="feed">
+    <div class="feed-header">
+      <h3>Live Traffic</h3>
+      <div style="display:flex;gap:8px">
+        <div class="filter-btn active">All</div>
+        <div class="filter-btn">Anthropic</div>
+        <div class="filter-btn">OpenAI</div>
+        <div class="filter-btn">Gemini</div>
+      </div>
+    </div>
+    <div class="feed-cols">
+      <span>Time</span><span>Provider</span><span>Model</span><span>Agent / Intent</span><span>Tokens</span><span>Cost</span><span>Status</span>
+    </div>
+    <div id="feed-items">
+      <div class="feed-item new">
+        <span class="mono">18:42:03</span>
+        <span><span class="tag-pill tag-anthropic">Anthropic</span></span>
+        <span class="mono">opus-4</span>
+        <span style="color:var(--text)">claude-code &middot; "refactor session module to use..."</span>
+        <span class="mono">12,841</span>
+        <span style="color:#fff">$0.38</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:58</span>
+        <span><span class="tag-pill tag-openai">OpenAI</span></span>
+        <span class="mono">o3</span>
+        <span style="color:var(--text)">codex &middot; "fix the websocket frame masking..."</span>
+        <span class="mono">8,204</span>
+        <span style="color:#fff">$0.12</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:51</span>
+        <span><span class="tag-pill tag-anthropic">Anthropic</span></span>
+        <span class="mono">sonnet-4</span>
+        <span style="color:var(--text)">cursor &middot; "add error handling to the capture..."</span>
+        <span class="mono">4,512</span>
+        <span style="color:#fff">$0.04</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:44</span>
+        <span><span class="tag-pill tag-gemini">Gemini</span></span>
+        <span class="mono">gemini-2.5</span>
+        <span style="color:var(--text)">aider &middot; "migrate database schema to v3..."</span>
+        <span class="mono">6,339</span>
+        <span style="color:#fff">$0.05</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:37</span>
+        <span><span class="tag-pill tag-anthropic">Anthropic</span></span>
+        <span class="mono">opus-4</span>
+        <span style="color:var(--text)">claude-code &middot; "write integration tests for WAL..."</span>
+        <span class="mono">15,102</span>
+        <span style="color:#fff">$0.45</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:29</span>
+        <span><span class="tag-pill tag-openai">OpenAI</span></span>
+        <span class="mono">gpt-4.1</span>
+        <span style="color:var(--text)">cursor &middot; "generate TypeScript types from..."</span>
+        <span class="mono">3,288</span>
+        <span style="color:#fff">$0.03</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:15</span>
+        <span><span class="tag-pill tag-anthropic">Anthropic</span></span>
+        <span class="mono">sonnet-4</span>
+        <span style="color:var(--text)">claude-code &middot; "explain the TLS MITM handshake..."</span>
+        <span class="mono">2,891</span>
+        <span style="color:#fff">$0.03</span>
+        <span><span class="tag-pill tag-warn">429</span></span>
+      </div>
+      <div class="feed-item">
+        <span class="mono">18:41:02</span>
+        <span><span class="tag-pill tag-anthropic">Anthropic</span></span>
+        <span class="mono">opus-4</span>
+        <span style="color:var(--text)">claude-code &middot; "implement S3 object store with..."</span>
+        <span class="mono">18,445</span>
+        <span style="color:#fff">$0.55</span>
+        <span><span class="tag-pill tag-ok">200</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SESSIONS ========== -->
+<div class="page" id="page-sessions">
+  <div class="header">
+    <h2>Sessions</h2>
+    <div class="header-meta">
+      <input class="search-input" placeholder="Search sessions by intent, model, or agent...">
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-btn active">All Sessions</div>
+    <div class="filter-btn">Active</div>
+    <div class="filter-btn">Completed</div>
+    <div class="filter-btn">Claude Code</div>
+    <div class="filter-btn">Cursor</div>
+    <div class="filter-btn">Codex</div>
+    <div class="filter-btn">Aider</div>
+  </div>
+
+  <div class="table-wrap session-list" id="session-list">
+    <table>
+      <thead>
+        <tr>
+          <th>Session ID</th>
+          <th>Framework</th>
+          <th>Model</th>
+          <th>Intent</th>
+          <th>Turns</th>
+          <th>Tokens</th>
+          <th>Cost</th>
+          <th>Duration</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="session-row" data-session="a3f8c1d42e">
+          <td class="mono">a3f8c1...d42e</td>
+          <td><span class="tag-pill tag-purple">claude-code</span></td>
+          <td class="mono">opus-4</td>
+          <td>refactor session module to use metadata-ba...</td>
+          <td>34</td>
+          <td class="mono">142,830</td>
+          <td>$4.28</td>
+          <td>47m</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr class="session-row" data-session="b7e2a91f83">
+          <td class="mono">b7e2a9...1f83</td>
+          <td><span class="tag-pill tag-purple">claude-code</span></td>
+          <td class="mono">sonnet-4</td>
+          <td>fix token counting include cache tokens in...</td>
+          <td>18</td>
+          <td class="mono">52,441</td>
+          <td>$0.47</td>
+          <td>23m</td>
+          <td><span class="tag-pill tag-info">completed</span></td>
+        </tr>
+        <tr class="session-row" data-session="c1d4e8a290">
+          <td class="mono">c1d4e8...a290</td>
+          <td><span class="tag-pill" style="background:#1a3326;color:#6ee7b7">codex</span></td>
+          <td class="mono">o3</td>
+          <td>implement websocket frame capture for chat...</td>
+          <td>22</td>
+          <td class="mono">78,120</td>
+          <td>$1.17</td>
+          <td>31m</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr class="session-row" data-session="d9f3b27c61">
+          <td class="mono">d9f3b2...7c61</td>
+          <td><span class="tag-pill" style="background:#332d1a;color:#fcd34d">cursor</span></td>
+          <td class="mono">sonnet-4</td>
+          <td>add error handling to capture pipeline wit...</td>
+          <td>8</td>
+          <td class="mono">18,904</td>
+          <td>$0.17</td>
+          <td>12m</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr class="session-row" data-session="e2a7c53b48">
+          <td class="mono">e2a7c5...3b48</td>
+          <td><span class="tag-pill" style="background:#2d1f4e;color:#c4a5f7">aider</span></td>
+          <td class="mono">gemini-2.5</td>
+          <td>migrate database schema to v3 with additiv...</td>
+          <td>15</td>
+          <td class="mono">44,210</td>
+          <td>$0.35</td>
+          <td>19m</td>
+          <td><span class="tag-pill tag-info">completed</span></td>
+        </tr>
+        <tr class="session-row" data-session="f4b8d19e27">
+          <td class="mono">f4b8d1...9e27</td>
+          <td><span class="tag-pill tag-purple">claude-code</span></td>
+          <td class="mono">opus-4</td>
+          <td>write integration tests for WAL module per...</td>
+          <td>41</td>
+          <td class="mono">198,750</td>
+          <td>$5.96</td>
+          <td>1h 12m</td>
+          <td><span class="tag-pill tag-info">completed</span></td>
+        </tr>
+        <tr class="session-row" data-session="a8c3e74d19">
+          <td class="mono">a8c3e7...4d19</td>
+          <td><span class="tag-pill tag-purple">claude-code</span></td>
+          <td class="mono">opus-4</td>
+          <td>implement S3 object store with aws-sdk-s3...</td>
+          <td>28</td>
+          <td class="mono">165,200</td>
+          <td>$4.95</td>
+          <td>52m</td>
+          <td><span class="tag-pill tag-info">completed</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Session Detail View (hidden until a row is clicked) -->
+  <div class="session-detail" id="session-detail">
+    <div class="back-link" id="session-back">&larr; Back to sessions</div>
+
+    <div class="header" style="margin-bottom:16px">
+      <h2 id="detail-title">Session a3f8c1...d42e</h2>
+      <div class="header-meta">
+        <span class="tag-pill tag-ok" id="detail-status">active</span>
+        <button class="btn">Export Session</button>
+      </div>
+    </div>
+
+    <div class="session-meta-grid" id="detail-meta">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="turn-cols">
+      <span>#</span><span>Timestamp</span><span>Model</span><span>User Request</span><span>Tokens</span><span>Cost</span><span>Latency</span><span>Status</span>
+    </div>
+    <div id="turns-container">
+      <!-- filled by JS -->
+    </div>
+    <div class="pagination" id="pagination">
+      <!-- filled by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ========== AUDIT TRAIL ========== -->
+<div class="page" id="page-audit">
+  <div class="header">
+    <h2>Audit Trail</h2>
+    <div class="header-meta">
+      <button class="btn">Export CSV</button>
+      <button class="btn btn-primary">Export for Auditor</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input class="search-input" placeholder="Search by hash, session, model, user...">
+    <div class="filter-btn active">All Events</div>
+    <div class="filter-btn">Requests</div>
+    <div class="filter-btn">Responses</div>
+    <div class="filter-btn">Anomalies</div>
+    <div class="filter-btn">Policy Violations</div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <h3>Immutable Capture Log</h3>
+      <span style="font-size:11px;color:var(--text-dim)">Chain of custody: every field is SHA-256 verified</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Session</th>
+          <th>Turn</th>
+          <th>Provider</th>
+          <th>Request Hash</th>
+          <th>Response Hash</th>
+          <th>Tokens</th>
+          <th>Integrity</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">2026-03-20T18:42:03Z</td>
+          <td class="mono">a3f8c1...d42e</td>
+          <td>34</td>
+          <td><span class="tag-pill tag-anthropic">Anthropic</span></td>
+          <td class="mono" style="font-size:11px">sha256:e8f4a2b1...</td>
+          <td class="mono" style="font-size:11px">sha256:7c3d9f01...</td>
+          <td class="mono">12,841</td>
+          <td><span class="tag-pill tag-ok">verified</span></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-03-20T18:41:58Z</td>
+          <td class="mono">c1d4e8...a290</td>
+          <td>22</td>
+          <td><span class="tag-pill tag-openai">OpenAI</span></td>
+          <td class="mono" style="font-size:11px">sha256:a1b2c3d4...</td>
+          <td class="mono" style="font-size:11px">sha256:9e8f7a6b...</td>
+          <td class="mono">8,204</td>
+          <td><span class="tag-pill tag-ok">verified</span></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-03-20T18:41:51Z</td>
+          <td class="mono">d9f3b2...7c61</td>
+          <td>8</td>
+          <td><span class="tag-pill tag-anthropic">Anthropic</span></td>
+          <td class="mono" style="font-size:11px">sha256:f5e6d7c8...</td>
+          <td class="mono" style="font-size:11px">sha256:1a2b3c4d...</td>
+          <td class="mono">4,512</td>
+          <td><span class="tag-pill tag-ok">verified</span></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-03-20T18:41:44Z</td>
+          <td class="mono">e2a7c5...3b48</td>
+          <td>15</td>
+          <td><span class="tag-pill tag-gemini">Gemini</span></td>
+          <td class="mono" style="font-size:11px">sha256:b4c5d6e7...</td>
+          <td class="mono" style="font-size:11px">sha256:2d3e4f5a...</td>
+          <td class="mono">6,339</td>
+          <td><span class="tag-pill tag-ok">verified</span></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-03-20T18:41:37Z</td>
+          <td class="mono">f4b8d1...9e27</td>
+          <td>41</td>
+          <td><span class="tag-pill tag-anthropic">Anthropic</span></td>
+          <td class="mono" style="font-size:11px">sha256:c8d9e0f1...</td>
+          <td class="mono" style="font-size:11px">sha256:3f4a5b6c...</td>
+          <td class="mono">15,102</td>
+          <td><span class="tag-pill tag-ok">verified</span></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-03-20T18:41:15Z</td>
+          <td class="mono">a3f8c1...d42e</td>
+          <td>33</td>
+          <td><span class="tag-pill tag-anthropic">Anthropic</span></td>
+          <td class="mono" style="font-size:11px">sha256:d2e3f4a5...</td>
+          <td class="mono" style="font-size:11px">sha256:--</td>
+          <td class="mono">2,891</td>
+          <td><span class="tag-pill tag-warn">429 retry</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========== COMPLIANCE ========== -->
+<div class="page" id="page-compliance">
+  <div class="header">
+    <h2>Compliance Dashboard</h2>
+    <div class="header-meta">
+      <span style="color:var(--text-dim);font-size:12px">Last assessment: 2026-03-20 14:00 UTC</span>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Overall Score</div>
+      <div class="card-value" style="color:var(--green)">94%</div>
+      <div class="card-sub">across all frameworks</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Capture Integrity</div>
+      <div class="card-value" style="color:var(--green)">100%</div>
+      <div class="card-sub">0 hash mismatches</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Dropped Events</div>
+      <div class="card-value">0</div>
+      <div class="card-sub">WAL ensures zero loss</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Open Findings</div>
+      <div class="card-value" style="color:var(--yellow)">3</div>
+      <div class="card-sub">2 low, 1 medium</div>
+    </div>
+  </div>
+
+  <div class="compliance-grid">
+    <div class="compliance-card">
+      <h3>SOC 2 Type II</h3>
+      <div class="sub">Trust Services Criteria - AI Controls</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:96%;background:var(--green)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:12px"><span>96% compliant</span><span>48/50 controls</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> CC6.1 &mdash; Logical access to AI systems restricted</li>
+        <li><span class="check">&#10003;</span> CC7.2 &mdash; System operations monitored for anomalies</li>
+        <li><span class="check">&#10003;</span> CC8.1 &mdash; Changes to AI systems are authorized</li>
+        <li><span class="check">&#10003;</span> CC6.3 &mdash; All LLM interactions logged immutably</li>
+        <li><span class="check">&#10003;</span> CC7.4 &mdash; Data integrity verified via cryptographic hash</li>
+        <li><span class="pending">&#9679;</span> CC6.7 &mdash; Role-based access to audit logs (in progress)</li>
+        <li><span class="pending">&#9679;</span> CC9.1 &mdash; Automated anomaly alerting (planned)</li>
+      </ul>
+    </div>
+
+    <div class="compliance-card">
+      <h3>ISO 42001</h3>
+      <div class="sub">AI Management System Standard</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:91%;background:var(--green)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:12px"><span>91% compliant</span><span>32/35 controls</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> 6.1.2 &mdash; AI system inventory and classification</li>
+        <li><span class="check">&#10003;</span> 6.2.4 &mdash; AI data management and provenance tracking</li>
+        <li><span class="check">&#10003;</span> 8.4 &mdash; AI system monitoring and measurement</li>
+        <li><span class="check">&#10003;</span> 9.1 &mdash; Performance evaluation of AI operations</li>
+        <li><span class="check">&#10003;</span> A.5.4 &mdash; Logging of AI system inputs and outputs</li>
+        <li><span class="pending">&#9679;</span> A.7.3 &mdash; Bias monitoring in model outputs (planned)</li>
+        <li><span class="pending">&#9679;</span> 10.1 &mdash; Nonconformity management automation (planned)</li>
+      </ul>
+    </div>
+
+    <div class="compliance-card">
+      <h3>EU AI Act</h3>
+      <div class="sub">High-Risk AI System Requirements</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:88%;background:var(--yellow)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:12px"><span>88% ready</span><span>22/25 requirements</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> Art. 12 &mdash; Record-keeping (automatic logging)</li>
+        <li><span class="check">&#10003;</span> Art. 13 &mdash; Transparency (interaction capture)</li>
+        <li><span class="check">&#10003;</span> Art. 14 &mdash; Human oversight capabilities</li>
+        <li><span class="check">&#10003;</span> Art. 9 &mdash; Risk management system data</li>
+        <li><span class="pending">&#9679;</span> Art. 10 &mdash; Data governance (classification WIP)</li>
+        <li><span class="pending">&#9679;</span> Art. 15 &mdash; Accuracy metrics dashboard (planned)</li>
+        <li><span class="pending">&#9679;</span> Art. 61 &mdash; Post-market monitoring (planned)</li>
+      </ul>
+    </div>
+
+    <div class="compliance-card">
+      <h3>NIST AI RMF</h3>
+      <div class="sub">AI Risk Management Framework</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:93%;background:var(--green)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:12px"><span>93% mapped</span><span>28/30 practices</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> GOVERN 1.1 &mdash; AI governance policies documented</li>
+        <li><span class="check">&#10003;</span> MAP 2.3 &mdash; AI system dependencies cataloged</li>
+        <li><span class="check">&#10003;</span> MEASURE 2.6 &mdash; AI system performance measured</li>
+        <li><span class="check">&#10003;</span> MANAGE 1.3 &mdash; Response to AI risks identified</li>
+        <li><span class="check">&#10003;</span> MANAGE 4.1 &mdash; AI incidents documented</li>
+        <li><span class="pending">&#9679;</span> MEASURE 3.2 &mdash; Feedback integration (planned)</li>
+        <li><span class="pending">&#9679;</span> MANAGE 2.4 &mdash; Automated risk thresholds (planned)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========== AUDIT REPORTS ========== -->
+<div class="page" id="page-reports">
+  <div class="header">
+    <h2>Regulatory Audit Reports</h2>
+    <div class="header-meta">
+      <button class="btn btn-primary">Generate New Report</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <h3>Generated Reports</h3>
+      <span style="font-size:11px;color:var(--text-dim)">Auditor-ready, tamper-evident exports</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Report</th>
+          <th>Framework</th>
+          <th>Period</th>
+          <th>Captures</th>
+          <th>Findings</th>
+          <th>Hash</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:#fff">SOC 2 Monthly - March 2026</td>
+          <td><span class="tag-pill tag-info">SOC 2</span></td>
+          <td class="mono">Mar 1-20</td>
+          <td class="mono">14,832</td>
+          <td><span style="color:var(--green)">0 critical</span></td>
+          <td class="mono" style="font-size:11px">sha256:ab12cd...</td>
+          <td><span class="tag-pill tag-ok">final</span></td>
+          <td><button class="btn">Download</button></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">ISO 42001 Quarterly - Q1 2026</td>
+          <td><span class="tag-pill tag-purple">ISO 42001</span></td>
+          <td class="mono">Jan 1 - Mar 20</td>
+          <td class="mono">128,441</td>
+          <td><span style="color:var(--yellow)">2 medium</span></td>
+          <td class="mono" style="font-size:11px">sha256:ef34ab...</td>
+          <td><span class="tag-pill tag-ok">final</span></td>
+          <td><button class="btn">Download</button></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">EU AI Act Readiness Assessment</td>
+          <td><span class="tag-pill tag-warn">EU AI Act</span></td>
+          <td class="mono">Mar 2026</td>
+          <td class="mono">14,832</td>
+          <td><span style="color:var(--yellow)">3 open</span></td>
+          <td class="mono" style="font-size:11px">sha256:9f8e7d...</td>
+          <td><span class="tag-pill tag-info">draft</span></td>
+          <td><button class="btn">Download</button></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Data Provenance Chain Report</td>
+          <td><span class="tag-pill" style="background:var(--accent-dim);color:var(--cyan)">Chain of Custody</span></td>
+          <td class="mono">Mar 15-20</td>
+          <td class="mono">4,210</td>
+          <td><span style="color:var(--green)">0 breaks</span></td>
+          <td class="mono" style="font-size:11px">sha256:5a6b7c...</td>
+          <td><span class="tag-pill tag-ok">final</span></td>
+          <td><button class="btn">Download</button></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">NIST AI RMF Mapping Report</td>
+          <td><span class="tag-pill" style="background:#1a3326;color:#6ee7b7">NIST</span></td>
+          <td class="mono">Q1 2026</td>
+          <td class="mono">128,441</td>
+          <td><span style="color:var(--yellow)">2 planned</span></td>
+          <td class="mono" style="font-size:11px">sha256:d4e5f6...</td>
+          <td><span class="tag-pill tag-ok">final</span></td>
+          <td><button class="btn">Download</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two-col">
+    <div class="chart-box">
+      <h3>Report Coverage Over Time</h3>
+      <div class="bar-chart">
+        <div class="bar-group"><div class="bar-val">89%</div><div class="bar" style="height:89%;background:var(--accent)"></div><div class="bar-label">Oct</div></div>
+        <div class="bar-group"><div class="bar-val">91%</div><div class="bar" style="height:91%;background:var(--accent)"></div><div class="bar-label">Nov</div></div>
+        <div class="bar-group"><div class="bar-val">91%</div><div class="bar" style="height:91%;background:var(--accent)"></div><div class="bar-label">Dec</div></div>
+        <div class="bar-group"><div class="bar-val">93%</div><div class="bar" style="height:93%;background:var(--accent)"></div><div class="bar-label">Jan</div></div>
+        <div class="bar-group"><div class="bar-val">94%</div><div class="bar" style="height:94%;background:var(--green)"></div><div class="bar-label">Feb</div></div>
+        <div class="bar-group"><div class="bar-val">96%</div><div class="bar" style="height:96%;background:var(--green)"></div><div class="bar-label">Mar</div></div>
+      </div>
+    </div>
+    <div class="chart-box">
+      <h3>Findings Trend</h3>
+      <div class="bar-chart">
+        <div class="bar-group"><div class="bar-val">7</div><div class="bar" style="height:70%;background:var(--red)"></div><div class="bar-label">Oct</div></div>
+        <div class="bar-group"><div class="bar-val">5</div><div class="bar" style="height:50%;background:var(--yellow)"></div><div class="bar-label">Nov</div></div>
+        <div class="bar-group"><div class="bar-val">4</div><div class="bar" style="height:40%;background:var(--yellow)"></div><div class="bar-label">Dec</div></div>
+        <div class="bar-group"><div class="bar-val">3</div><div class="bar" style="height:30%;background:var(--yellow)"></div><div class="bar-label">Jan</div></div>
+        <div class="bar-group"><div class="bar-val">3</div><div class="bar" style="height:30%;background:var(--yellow)"></div><div class="bar-label">Feb</div></div>
+        <div class="bar-group"><div class="bar-val">2</div><div class="bar" style="height:20%;background:var(--green)"></div><div class="bar-label">Mar</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== COST & USAGE ========== -->
+<div class="page" id="page-cost">
+  <div class="header">
+    <h2>Cost & Usage Intelligence</h2>
+    <div class="header-meta">
+      <div class="filters" style="margin:0">
+        <div class="filter-btn active">Today</div>
+        <div class="filter-btn">7 days</div>
+        <div class="filter-btn">30 days</div>
+        <div class="filter-btn">Quarter</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total Spend (MTD)</div>
+      <div class="card-value">$4,218</div>
+      <div class="card-delta up">$6,800 projected EOM</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Tokens (MTD)</div>
+      <div class="card-value">48.2M</div>
+      <div class="card-sub">18.1M cache-read (37%)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Avg Cost / Session</div>
+      <div class="card-value">$2.84</div>
+      <div class="card-delta down">-8% vs last month</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cache Hit Rate</div>
+      <div class="card-value">37%</div>
+      <div class="card-sub">saving ~$1,560/month</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cost / Developer / Day</div>
+      <div class="card-value">$28.12</div>
+      <div class="card-sub">across 8 developers</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="chart-box">
+      <h3>Spend by Provider</h3>
+      <div style="padding:8px 0">
+        <div class="cost-row">
+          <div class="cost-label">Anthropic</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:68%;background:linear-gradient(90deg,#7c3aed,#a855f7)">68%</div></div>
+          <div class="cost-amount">$2,868</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">OpenAI</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:22%;background:linear-gradient(90deg,#059669,#34d399)">22%</div></div>
+          <div class="cost-amount">$928</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">Gemini</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:10%;background:linear-gradient(90deg,#d97706,#fbbf24)">10%</div></div>
+          <div class="cost-amount">$422</div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-box">
+      <h3>Spend by Model</h3>
+      <div style="padding:8px 0">
+        <div class="cost-row">
+          <div class="cost-label">opus-4</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:52%;background:linear-gradient(90deg,#7c3aed,#a855f7)">52%</div></div>
+          <div class="cost-amount">$2,193</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">sonnet-4</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:18%;background:linear-gradient(90deg,#6366f1,#818cf8)">18%</div></div>
+          <div class="cost-amount">$759</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">o3</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:14%;background:linear-gradient(90deg,#059669,#34d399)">14%</div></div>
+          <div class="cost-amount">$590</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">gpt-4.1</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:8%;background:linear-gradient(90deg,#0d9488,#2dd4bf)">8%</div></div>
+          <div class="cost-amount">$338</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">gemini-2.5</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:8%;background:linear-gradient(90deg,#d97706,#fbbf24)">8%</div></div>
+          <div class="cost-amount">$338</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="chart-box">
+      <h3>Daily Spend (last 14 days)</h3>
+      <div class="bar-chart" style="height:120px">
+        <div class="bar-group"><div class="bar-val">$180</div><div class="bar" style="height:60%;background:var(--accent)"></div><div class="bar-label">7</div></div>
+        <div class="bar-group"><div class="bar-val">$210</div><div class="bar" style="height:70%;background:var(--accent)"></div><div class="bar-label">8</div></div>
+        <div class="bar-group"><div class="bar-val">$45</div><div class="bar" style="height:15%;background:var(--accent)"></div><div class="bar-label">9</div></div>
+        <div class="bar-group"><div class="bar-val">$30</div><div class="bar" style="height:10%;background:var(--accent)"></div><div class="bar-label">10</div></div>
+        <div class="bar-group"><div class="bar-val">$245</div><div class="bar" style="height:82%;background:var(--accent)"></div><div class="bar-label">11</div></div>
+        <div class="bar-group"><div class="bar-val">$198</div><div class="bar" style="height:66%;background:var(--accent)"></div><div class="bar-label">12</div></div>
+        <div class="bar-group"><div class="bar-val">$220</div><div class="bar" style="height:73%;background:var(--accent)"></div><div class="bar-label">13</div></div>
+        <div class="bar-group"><div class="bar-val">$195</div><div class="bar" style="height:65%;background:var(--accent)"></div><div class="bar-label">14</div></div>
+        <div class="bar-group"><div class="bar-val">$55</div><div class="bar" style="height:18%;background:var(--accent)"></div><div class="bar-label">15</div></div>
+        <div class="bar-group"><div class="bar-val">$40</div><div class="bar" style="height:13%;background:var(--accent)"></div><div class="bar-label">16</div></div>
+        <div class="bar-group"><div class="bar-val">$260</div><div class="bar" style="height:87%;background:var(--accent)"></div><div class="bar-label">17</div></div>
+        <div class="bar-group"><div class="bar-val">$280</div><div class="bar" style="height:93%;background:var(--accent)"></div><div class="bar-label">18</div></div>
+        <div class="bar-group"><div class="bar-val">$300</div><div class="bar" style="height:100%;background:var(--green)"></div><div class="bar-label">19</div></div>
+        <div class="bar-group"><div class="bar-val">$218</div><div class="bar" style="height:73%;background:var(--green)"></div><div class="bar-label">20</div></div>
+      </div>
+    </div>
+    <div class="chart-box">
+      <h3>Spend by Agent Framework</h3>
+      <div style="padding:8px 0">
+        <div class="cost-row">
+          <div class="cost-label">Claude Code</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:58%;background:linear-gradient(90deg,#7c3aed,#a855f7)">58%</div></div>
+          <div class="cost-amount">$2,446</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">Cursor</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:24%;background:linear-gradient(90deg,#0891b2,#22d3ee)">24%</div></div>
+          <div class="cost-amount">$1,012</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">Codex</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:12%;background:linear-gradient(90deg,#059669,#34d399)">12%</div></div>
+          <div class="cost-amount">$506</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-label">Aider</div>
+          <div class="cost-bar-wrap"><div class="cost-bar-fill" style="width:6%;background:linear-gradient(90deg,#d97706,#fbbf24)">6%</div></div>
+          <div class="cost-amount">$254</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-box">
+    <h3>Projected Monthly Costs (next 3 months)</h3>
+    <table style="width:100%">
+      <thead><tr><th>Month</th><th>Sessions</th><th>Tokens</th><th>Projected Cost</th><th>vs Current</th><th>Assumptions</th></tr></thead>
+      <tbody>
+        <tr><td style="color:#fff">April 2026</td><td class="mono">1,820</td><td class="mono">74M</td><td style="color:#fff;font-weight:700">$7,400</td><td class="card-delta up">+9%</td><td style="color:var(--text-dim)">+2 developers, current model mix</td></tr>
+        <tr><td style="color:#fff">May 2026</td><td class="mono">2,100</td><td class="mono">88M</td><td style="color:#fff;font-weight:700">$8,200</td><td class="card-delta up">+21%</td><td style="color:var(--text-dim)">+2 developers, 10% shift to Opus</td></tr>
+        <tr><td style="color:#fff">June 2026</td><td class="mono">2,100</td><td class="mono">80M</td><td style="color:#fff;font-weight:700">$7,100</td><td class="card-delta down" style="color:var(--green)">+5%</td><td style="color:var(--text-dim)">Cache optimization, stable team</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========== AGENT ANALYTICS ========== -->
+<div class="page" id="page-agents">
+  <div class="header">
+    <h2>Agent Analytics</h2>
+    <div class="header-meta">
+      <div class="filters" style="margin:0">
+        <div class="filter-btn active">All Agents</div>
+        <div class="filter-btn">By Developer</div>
+        <div class="filter-btn">By Repo</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Active Agents</div>
+      <div class="card-value">12</div>
+      <div class="card-sub">across 4 frameworks</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Sessions (MTD)</div>
+      <div class="card-value">1,484</div>
+      <div class="card-delta up">+18% vs Feb</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Avg Turns / Session</div>
+      <div class="card-value">24.3</div>
+      <div class="card-sub">median: 18</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Unique Developers</div>
+      <div class="card-value">8</div>
+      <div class="card-sub">by account_uuid</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="table-wrap">
+      <div class="table-header"><h3>Top Developers by Usage</h3></div>
+      <table>
+        <thead><tr><th>Developer</th><th>Sessions</th><th>Tokens</th><th>Cost</th><th>Favorite Model</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#fff">dev-a3f8 (amer)</td><td>312</td><td class="mono">12.4M</td><td>$1,240</td><td class="mono">opus-4</td></tr>
+          <tr><td style="color:#fff">dev-b7e2</td><td>248</td><td class="mono">8.1M</td><td>$648</td><td class="mono">sonnet-4</td></tr>
+          <tr><td style="color:#fff">dev-c1d4</td><td>201</td><td class="mono">7.8M</td><td>$702</td><td class="mono">o3</td></tr>
+          <tr><td style="color:#fff">dev-d9f3</td><td>189</td><td class="mono">5.2M</td><td>$416</td><td class="mono">sonnet-4</td></tr>
+          <tr><td style="color:#fff">dev-e2a7</td><td>156</td><td class="mono">4.9M</td><td>$392</td><td class="mono">gemini-2.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header"><h3>Top Repositories</h3></div>
+      <table>
+        <thead><tr><th>Repository</th><th>Sessions</th><th>Branches</th><th>Cost</th><th>Primary Agent</th></tr></thead>
+        <tbody>
+          <tr><td style="color:#fff">recondo</td><td>420</td><td>12</td><td>$1,680</td><td><span class="tag-pill tag-purple">claude-code</span></td></tr>
+          <tr><td style="color:#fff">frontend-app</td><td>310</td><td>8</td><td>$868</td><td><span class="tag-pill" style="background:#332d1a;color:#fcd34d">cursor</span></td></tr>
+          <tr><td style="color:#fff">data-pipeline</td><td>245</td><td>5</td><td>$612</td><td><span class="tag-pill" style="background:#2d1f4e;color:#c4a5f7">aider</span></td></tr>
+          <tr><td style="color:#fff">infra-terraform</td><td>180</td><td>4</td><td>$504</td><td><span class="tag-pill tag-purple">claude-code</span></td></tr>
+          <tr><td style="color:#fff">mobile-sdk</td><td>142</td><td>6</td><td>$398</td><td><span class="tag-pill" style="background:#1a3326;color:#6ee7b7">codex</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== POLICIES ========== -->
+<div class="page" id="page-policies">
+  <div class="header">
+    <h2>Governance Policies</h2>
+    <div class="header-meta">
+      <button class="btn btn-primary">+ New Policy</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header"><h3>Active Policies</h3></div>
+    <table>
+      <thead><tr><th>Policy</th><th>Type</th><th>Scope</th><th>Action</th><th>Triggers (MTD)</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td style="color:#fff">PII Detection in Prompts</td>
+          <td><span class="tag-pill tag-warn">block</span></td>
+          <td>All agents</td>
+          <td>Block request + alert</td>
+          <td class="mono">23</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Max Token Budget per Session</td>
+          <td><span class="tag-pill tag-info">limit</span></td>
+          <td>All agents</td>
+          <td>Warn at 200K, block at 500K</td>
+          <td class="mono">8</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Approved Models Allowlist</td>
+          <td><span class="tag-pill tag-warn">block</span></td>
+          <td>Production</td>
+          <td>Block unapproved models</td>
+          <td class="mono">2</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Source Code Exfiltration Check</td>
+          <td><span class="tag-pill tag-fail">alert</span></td>
+          <td>All agents</td>
+          <td>Log + alert security team</td>
+          <td class="mono">0</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">After-Hours Usage Alert</td>
+          <td><span class="tag-pill tag-info">monitor</span></td>
+          <td>All agents</td>
+          <td>Log for review</td>
+          <td class="mono">41</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Cost Anomaly Detection</td>
+          <td><span class="tag-pill tag-fail">alert</span></td>
+          <td>All agents</td>
+          <td>Alert if 3x daily average</td>
+          <td class="mono">1</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="chart-box">
+    <h3>Policy Trigger History (last 7 days)</h3>
+    <div class="bar-chart" style="height:100px">
+      <div class="bar-group"><div class="bar-val">12</div><div class="bar" style="height:60%;background:var(--yellow)"></div><div class="bar-label">Mar 14</div></div>
+      <div class="bar-group"><div class="bar-val">8</div><div class="bar" style="height:40%;background:var(--yellow)"></div><div class="bar-label">Mar 15</div></div>
+      <div class="bar-group"><div class="bar-val">3</div><div class="bar" style="height:15%;background:var(--green)"></div><div class="bar-label">Mar 16</div></div>
+      <div class="bar-group"><div class="bar-val">15</div><div class="bar" style="height:75%;background:var(--yellow)"></div><div class="bar-label">Mar 17</div></div>
+      <div class="bar-group"><div class="bar-val">20</div><div class="bar" style="height:100%;background:var(--red)"></div><div class="bar-label">Mar 18</div></div>
+      <div class="bar-group"><div class="bar-val">6</div><div class="bar" style="height:30%;background:var(--green)"></div><div class="bar-label">Mar 19</div></div>
+      <div class="bar-group"><div class="bar-val">11</div><div class="bar" style="height:55%;background:var(--yellow)"></div><div class="bar-label">Mar 20</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== API KEYS ========== -->
+<div class="page" id="page-keys">
+  <div class="header">
+    <h2>API Key Management</h2>
+    <div class="header-meta">
+      <button class="btn btn-primary">+ Register Key</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header"><h3>Registered API Keys</h3><span style="font-size:11px;color:var(--text-dim)">Keys are never stored -- only SHA-256 fingerprints for attribution</span></div>
+    <table>
+      <thead><tr><th>Name</th><th>Provider</th><th>Fingerprint</th><th>Agents</th><th>Last Used</th><th>Monthly Spend</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td style="color:#fff">Engineering Team - Anthropic</td>
+          <td><span class="tag-pill tag-anthropic">Anthropic</span></td>
+          <td class="mono" style="font-size:11px">sha256:a1b2c3...</td>
+          <td>6</td>
+          <td class="mono">2 min ago</td>
+          <td>$2,868</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">Engineering Team - OpenAI</td>
+          <td><span class="tag-pill tag-openai">OpenAI</span></td>
+          <td class="mono" style="font-size:11px">sha256:d4e5f6...</td>
+          <td>4</td>
+          <td class="mono">5 min ago</td>
+          <td>$928</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+        <tr>
+          <td style="color:#fff">ML Team - Gemini</td>
+          <td><span class="tag-pill tag-gemini">Gemini</span></td>
+          <td class="mono" style="font-size:11px">sha256:g7h8i9...</td>
+          <td>2</td>
+          <td class="mono">18 min ago</td>
+          <td>$422</td>
+          <td><span class="tag-pill tag-ok">active</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// Navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    const page = item.getAttribute('data-page');
+    document.getElementById('page-' + page).classList.add('active');
+    // Reset session detail when navigating to any page (including sessions)
+    document.getElementById('session-list').classList.remove('hidden');
+    document.getElementById('session-detail').classList.remove('active');
+  });
+});
+
+// ==================== SESSION DETAIL MOCK DATA ====================
+
+const sessionData = {
+  a3f8c1d42e: {
+    id: 'a3f8c1d42e7b9f03e6a84d21c5b7e890f1234567890abcdef1234567890abcd',
+    shortId: 'a3f8c1...d42e',
+    framework: 'claude-code', frameworkClass: 'tag-purple',
+    provider: 'Anthropic', providerClass: 'tag-anthropic',
+    model: 'claude-opus-4-6',
+    intent: 'refactor session module to use metadata-based identity',
+    status: 'active', statusClass: 'tag-ok',
+    startedAt: '2026-03-20T17:55:00Z',
+    lastActive: '2026-03-20T18:42:03Z',
+    totalTurns: 34, totalTokens: 142830, totalCost: 4.28,
+    accountUuid: 'acct-8f3a-d42e', deviceId: 'dev-macbook-a3f8',
+    systemPromptHash: 'sha256:4a8b2c...f901', transport: 'http',
+    cacheReadTokens: 52400, cacheCreationTokens: 8200,
+  },
+  b7e2a91f83: {
+    id: 'b7e2a91f834ce028da7610b5f9c3de67890abcdef1234567890abcdef123456',
+    shortId: 'b7e2a9...1f83',
+    framework: 'claude-code', frameworkClass: 'tag-purple',
+    provider: 'Anthropic', providerClass: 'tag-anthropic',
+    model: 'claude-sonnet-4-6',
+    intent: 'fix token counting include cache tokens in totals',
+    status: 'completed', statusClass: 'tag-info',
+    startedAt: '2026-03-20T16:10:00Z',
+    lastActive: '2026-03-20T16:33:00Z',
+    totalTurns: 18, totalTokens: 52441, totalCost: 0.47,
+    accountUuid: 'acct-8f3a-d42e', deviceId: 'dev-macbook-a3f8',
+    systemPromptHash: 'sha256:4a8b2c...f901', transport: 'http',
+    cacheReadTokens: 21000, cacheCreationTokens: 3100,
+  },
+  c1d4e8a290: {
+    id: 'c1d4e8a29056bf81ca3d7e940f12ab3c4d5e6f7890abcdef1234567890abcde',
+    shortId: 'c1d4e8...a290',
+    framework: 'codex', frameworkClass: 'tag-openai',
+    provider: 'OpenAI', providerClass: 'tag-openai',
+    model: 'o3',
+    intent: 'implement websocket frame capture for chatgpt.com',
+    status: 'active', statusClass: 'tag-ok',
+    startedAt: '2026-03-20T17:41:00Z',
+    lastActive: '2026-03-20T18:12:00Z',
+    totalTurns: 22, totalTokens: 78120, totalCost: 1.17,
+    accountUuid: 'acct-c1d4-e8a2', deviceId: 'dev-linux-c1d4',
+    systemPromptHash: 'sha256:9e2f1a...b345', transport: 'websocket',
+    cacheReadTokens: 0, cacheCreationTokens: 0,
+  },
+  d9f3b27c61: {
+    id: 'd9f3b27c61a4ef82db5c1089e2f34a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1',
+    shortId: 'd9f3b2...7c61',
+    framework: 'cursor', frameworkClass: 'tag-gemini',
+    provider: 'Anthropic', providerClass: 'tag-anthropic',
+    model: 'claude-sonnet-4-6',
+    intent: 'add error handling to capture pipeline with retries',
+    status: 'active', statusClass: 'tag-ok',
+    startedAt: '2026-03-20T18:00:00Z',
+    lastActive: '2026-03-20T18:12:00Z',
+    totalTurns: 8, totalTokens: 18904, totalCost: 0.17,
+    accountUuid: 'acct-d9f3-b27c', deviceId: 'dev-macbook-d9f3',
+    systemPromptHash: 'sha256:7b3e4f...a218', transport: 'http',
+    cacheReadTokens: 6200, cacheCreationTokens: 1800,
+  },
+  e2a7c53b48: {
+    id: 'e2a7c53b48d1ef93ac4b2178f0e56c7d8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3',
+    shortId: 'e2a7c5...3b48',
+    framework: 'aider', frameworkClass: 'tag-purple',
+    provider: 'Gemini', providerClass: 'tag-gemini',
+    model: 'gemini-2.5-pro',
+    intent: 'migrate database schema to v3 with additive migrations',
+    status: 'completed', statusClass: 'tag-info',
+    startedAt: '2026-03-20T15:30:00Z',
+    lastActive: '2026-03-20T15:49:00Z',
+    totalTurns: 15, totalTokens: 44210, totalCost: 0.35,
+    accountUuid: 'acct-e2a7-c53b', deviceId: 'dev-linux-e2a7',
+    systemPromptHash: 'sha256:2c4d6e...8f01', transport: 'http',
+    cacheReadTokens: 0, cacheCreationTokens: 0,
+  },
+  f4b8d19e27: {
+    id: 'f4b8d19e27c3af04eb5d2189f0a67b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4',
+    shortId: 'f4b8d1...9e27',
+    framework: 'claude-code', frameworkClass: 'tag-purple',
+    provider: 'Anthropic', providerClass: 'tag-anthropic',
+    model: 'claude-opus-4-6',
+    intent: 'write integration tests for WAL module persistence',
+    status: 'completed', statusClass: 'tag-info',
+    startedAt: '2026-03-20T14:00:00Z',
+    lastActive: '2026-03-20T15:12:00Z',
+    totalTurns: 41, totalTokens: 198750, totalCost: 5.96,
+    accountUuid: 'acct-8f3a-d42e', deviceId: 'dev-macbook-a3f8',
+    systemPromptHash: 'sha256:4a8b2c...f901', transport: 'http',
+    cacheReadTokens: 78000, cacheCreationTokens: 12400,
+  },
+  a8c3e74d19: {
+    id: 'a8c3e74d19b2cf05dc6e3290a1b78c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5',
+    shortId: 'a8c3e7...4d19',
+    framework: 'claude-code', frameworkClass: 'tag-purple',
+    provider: 'Anthropic', providerClass: 'tag-anthropic',
+    model: 'claude-opus-4-6',
+    intent: 'implement S3 object store with aws-sdk-s3',
+    status: 'completed', statusClass: 'tag-info',
+    startedAt: '2026-03-20T12:30:00Z',
+    lastActive: '2026-03-20T13:22:00Z',
+    totalTurns: 28, totalTokens: 165200, totalCost: 4.95,
+    accountUuid: 'acct-8f3a-d42e', deviceId: 'dev-macbook-a3f8',
+    systemPromptHash: 'sha256:4a8b2c...f901', transport: 'http',
+    cacheReadTokens: 61000, cacheCreationTokens: 9800,
+  },
+};
+
+// Generate realistic turn data for a session
+const userMessages = [
+  "read the current session module and explain how session identity works",
+  "now refactor resolve() to check client metadata first before falling back to content-based",
+  "add a test for the metadata-based path with a mock session_id",
+  "the test is failing because extract_client_metadata returns None -- fix the JSON parsing",
+  "run the full test suite and fix any regressions",
+  "also add a test for the fallback path when metadata is missing",
+  "update the doc comments on SessionManager to reflect the new identity model",
+  "now wire the metadata extraction into the main capture pipeline in main.rs",
+  "there's a compile error on line 342 -- request_body is borrowed twice",
+  "good, now run clippy and fix any warnings",
+  "the session_tests are passing but tls_mitm_tests has a timeout -- investigate",
+  "it was a port conflict, fix by using port 0 for auto-assignment",
+  "run the full suite again to confirm everything passes",
+  "add the account_uuid and device_id fields to the sessions table migration",
+  "write a query function to look up sessions by account_uuid",
+  "create an index on account_uuid for the sessions table",
+  "update the CLI sessions command to show account_uuid when available",
+  "the display is wrapping badly in narrow terminals -- truncate account_uuid to 12 chars",
+  "implement tentative_session_id() so callers can get the ID before calling resolve()",
+  "add B3 fix: resume sequence_num from DB max when gateway restarts",
+  "test the restart scenario: create session, restart manager, verify seq continues",
+  "the test needs to pass current_max_seq from a DB query -- mock it",
+  "refactor extract_content_text to handle array content blocks",
+  "the preamble filter needs to also check for <task-notification> prefix",
+  "add detect_agent_framework() function for claude_code, cursor, aider detection",
+  "write tests for framework detection with various system prompt formats",
+  "edge case: system prompt containing both 'claude' and 'cursor' should match claude_code",
+  "implement extract_last_user_message with reverse iteration and preamble filtering",
+  "truncate extracted messages to 500 chars with ellipsis",
+  "the W2 fix: apply preamble filtering to the string content path too",
+  "update compute_system_prompt_hash to use a sentinel for None prompts",
+  "run just ci to make sure everything is clean",
+  "fix the one remaining clippy warning about unnecessary clone",
+  "all 738 tests passing, let's commit",
+  "review the diff one more time before committing",
+  "looks good, create the commit with a descriptive message",
+  "now update CLAUDE.md to document the new session identity model",
+  "add the metadata field table showing session_id, account_uuid, device_id",
+  "check that the data flow section reflects the new pipeline",
+  "commit the CLAUDE.md update separately",
+  "push both commits to main",
+];
+
+const responseSnippets = [
+  "I'll read the session module to understand the current identity model.\n\nThe current implementation uses `content_based_session_id()` which derives identity from `sha256(len(org):org + \"|\" + first_user_message_content)`. This means...",
+  "I've refactored `resolve()` to check `metadata.session_id` first. When present, it's normalized through `sha256_hex()` (H1 fix) to produce a fixed-length safe string. The fallback path remains unchanged.",
+  "Added test `metadata_based_session_uses_sha256_of_session_id` that verifies:\n- metadata with session_id produces sha256 of that value\n- same metadata always produces same session ID\n- different session_ids produce different IDs",
+  "The issue was in `extract_client_metadata`: the `metadata.user_id` field contains a JSON *string* (not object), so it needs double-parsing. Fixed: first extract as string, then parse the nested JSON.",
+  "Running `cargo nextest run --features test-support`...\n\n738 tests run: 738 passed, 0 skipped\n\nAll tests passing.",
+  "Added `fallback_content_based_when_no_metadata` test. Verifies that when `metadata` is `None`, the session ID matches the old content-based derivation.",
+  "Updated doc comments on `SessionManager` struct and `resolve()` method to document the two-tier identity model: metadata-first with content-based fallback.",
+  "Wired `extract_client_metadata()` into the main capture pipeline. The metadata is extracted from request bytes before they're hashed, then passed to `session_manager.resolve()`.",
+  "Fixed the double borrow: extracted metadata into a separate `let` binding before passing `&request_body` to the hash function. The borrow checker is satisfied now.",
+  "Clippy found 2 warnings: an unnecessary `clone()` on line 218 and a `map().unwrap_or()` that should be `map_or()`. Both fixed.",
+  "The `tls_mitm_tests::multiple_requests_through_tunnel_produce_multiple_captures` test is timing out after 30s. Looking at the test setup...",
+  "Found it: the test was binding to port 8443 which conflicts with a running gateway. Changed to `TcpListener::bind(\"127.0.0.1:0\")` for auto-port assignment.",
+  "Full suite clean:\n738 tests run: 738 passed, 0 skipped (5.2s)",
+  "Added migration v3:\n```sql\nALTER TABLE sessions ADD COLUMN account_uuid TEXT;\nALTER TABLE sessions ADD COLUMN device_id TEXT;\n```\nIdempotent: checks column existence first.",
+  "Added `query_sessions_by_account(conn, account_uuid) -> Vec<SessionRecord>` with ORDER BY last_active_at DESC.",
+  "Created index: `CREATE INDEX IF NOT EXISTS idx_sessions_account_uuid ON sessions(account_uuid)`",
+  "Updated the `sessions` CLI command. When `account_uuid` is present, it shows in a new column. Output now shows: ID | Framework | Model | Intent | Turns | Account | Last Active",
+];
+
+function generateTurns(session) {
+  const turns = [];
+  const startTime = new Date(session.startedAt);
+  const models = [session.model];
+  for (let i = 1; i <= session.totalTurns; i++) {
+    const turnTime = new Date(startTime.getTime() + (i - 1) * (60000 + Math.random() * 120000));
+    const inputTokens = Math.floor(Math.random() * 8000) + 2000;
+    const outputTokens = Math.floor(Math.random() * 6000) + 500;
+    const cacheRead = session.cacheReadTokens > 0 ? Math.floor(Math.random() * 4000) : 0;
+    const cacheCreate = session.cacheCreationTokens > 0 ? Math.floor(Math.random() * 800) : 0;
+    const totalTokens = inputTokens + outputTokens + cacheRead + cacheCreate;
+    const costPerToken = session.model.includes('opus') ? 0.00003 : session.model.includes('o3') ? 0.000015 : 0.000008;
+    const cost = (totalTokens * costPerToken).toFixed(3);
+    const latency = Math.floor(Math.random() * 4000) + 800;
+    const ttfb = Math.floor(Math.random() * 600) + 100;
+    const isError = Math.random() > 0.96;
+    const httpStatus = isError ? (Math.random() > 0.5 ? 429 : 500) : 200;
+    const stopReason = isError ? 'error' : (Math.random() > 0.9 ? 'max_tokens' : 'end_turn');
+    const msgIdx = (i - 1) % userMessages.length;
+    const respIdx = (i - 1) % responseSnippets.length;
+
+    const reqHash = 'sha256:' + Array.from({length:8}, ()=>Math.floor(Math.random()*16).toString(16)).join('') + '...';
+    const respHash = isError ? '--' : 'sha256:' + Array.from({length:8}, ()=>Math.floor(Math.random()*16).toString(16)).join('') + '...';
+
+    turns.push({
+      seq: i,
+      timestamp: turnTime.toISOString().replace(/\.\d+Z/,'Z'),
+      timeShort: turnTime.toTimeString().slice(0,8),
+      model: models[0],
+      userMessage: userMessages[msgIdx],
+      responseText: responseSnippets[respIdx],
+      inputTokens, outputTokens, cacheRead, cacheCreate, totalTokens,
+      cost: parseFloat(cost),
+      latencyMs: latency,
+      ttfbMs: ttfb,
+      httpStatus,
+      stopReason,
+      reqHash, respHash,
+      captureComplete: !isError,
+      transport: session.transport,
+    });
+  }
+  return turns;
+}
+
+// Cache generated turns per session
+const turnCache = {};
+
+function getTurns(sessionId) {
+  if (!turnCache[sessionId]) {
+    turnCache[sessionId] = generateTurns(sessionData[sessionId]);
+  }
+  return turnCache[sessionId];
+}
+
+const TURNS_PER_PAGE = 10;
+let currentSessionId = null;
+let currentPage = 1;
+
+function openSession(sessionId) {
+  currentSessionId = sessionId;
+  currentPage = 1;
+  const session = sessionData[sessionId];
+  if (!session) return;
+
+  document.getElementById('session-list').classList.add('hidden');
+  document.getElementById('session-detail').classList.add('active');
+
+  document.getElementById('detail-title').textContent = 'Session ' + session.shortId;
+  const statusEl = document.getElementById('detail-status');
+  statusEl.textContent = session.status;
+  statusEl.className = 'tag-pill ' + session.statusClass;
+
+  const fwStyle = session.framework === 'codex' ? 'background:#1a3326;color:#6ee7b7'
+    : session.framework === 'cursor' ? 'background:#332d1a;color:#fcd34d'
+    : session.framework === 'aider' ? 'background:#2d1f4e;color:#c4a5f7'
+    : '';
+  const fwClass = session.framework === 'claude-code' ? 'tag-pill tag-purple' : 'tag-pill';
+
+  document.getElementById('detail-meta').innerHTML = `
+    <div class="meta-item"><div class="label">Session ID</div><div class="value sm">${session.id.slice(0,24)}...</div></div>
+    <div class="meta-item"><div class="label">Framework</div><div class="value"><span class="${fwClass}" ${fwStyle ? 'style="'+fwStyle+'"' : ''}>${session.framework}</span></div></div>
+    <div class="meta-item"><div class="label">Provider</div><div class="value"><span class="tag-pill ${session.providerClass}">${session.provider}</span></div></div>
+    <div class="meta-item"><div class="label">Model</div><div class="value sm">${session.model}</div></div>
+    <div class="meta-item"><div class="label">Started</div><div class="value sm">${session.startedAt}</div></div>
+    <div class="meta-item"><div class="label">Last Active</div><div class="value sm">${session.lastActive}</div></div>
+    <div class="meta-item"><div class="label">Total Turns</div><div class="value">${session.totalTurns}</div></div>
+    <div class="meta-item"><div class="label">Total Tokens</div><div class="value">${session.totalTokens.toLocaleString()}</div></div>
+    <div class="meta-item"><div class="label">Total Cost</div><div class="value">$${session.totalCost.toFixed(2)}</div></div>
+    <div class="meta-item"><div class="label">Cache Read</div><div class="value sm">${session.cacheReadTokens.toLocaleString()} tokens</div></div>
+    <div class="meta-item"><div class="label">Account UUID</div><div class="value sm">${session.accountUuid}</div></div>
+    <div class="meta-item"><div class="label">Device ID</div><div class="value sm">${session.deviceId}</div></div>
+    <div class="meta-item"><div class="label">System Prompt</div><div class="value sm">${session.systemPromptHash}</div></div>
+    <div class="meta-item"><div class="label">Transport</div><div class="value sm">${session.transport}</div></div>
+  `;
+
+  renderTurns();
+}
+
+function renderTurns() {
+  const turns = getTurns(currentSessionId);
+  const totalPages = Math.ceil(turns.length / TURNS_PER_PAGE);
+  const start = (currentPage - 1) * TURNS_PER_PAGE;
+  const pageTurns = turns.slice(start, start + TURNS_PER_PAGE);
+
+  const container = document.getElementById('turns-container');
+  container.innerHTML = pageTurns.map(t => {
+    const statusPill = t.httpStatus === 200 ? '<span class="tag-pill tag-ok">200</span>'
+      : t.httpStatus === 429 ? '<span class="tag-pill tag-warn">429</span>'
+      : '<span class="tag-pill tag-fail">500</span>';
+    const maxInput = 10000;
+    const inputPct = Math.min(100, (t.inputTokens / maxInput) * 100);
+    const outputPct = Math.min(100, (t.outputTokens / maxInput) * 100);
+    const cachePct = Math.min(100, (t.cacheRead / maxInput) * 100);
+    const userMsgShort = t.userMessage.length > 60 ? t.userMessage.slice(0, 60) + '...' : t.userMessage;
+
+    return `
+      <div class="turn-row" onclick="toggleTurn(this)">
+        <div class="turn-header">
+          <span style="color:var(--accent);font-weight:600">#${t.seq}</span>
+          <span class="mono">${t.timeShort}</span>
+          <span class="mono" style="font-size:11px">${t.model.replace('claude-','').replace('-6','')}</span>
+          <span style="color:var(--text)">${userMsgShort}</span>
+          <span class="mono">${t.totalTokens.toLocaleString()}</span>
+          <span style="color:#fff;font-weight:600">$${t.cost.toFixed(3)}</span>
+          <span class="mono" style="font-size:11px">${t.latencyMs}ms</span>
+          <span>${statusPill}</span>
+        </div>
+        <div class="turn-body">
+          <div class="turn-section">
+            <div class="turn-section-title">User Request</div>
+            <div class="turn-text">${t.userMessage}</div>
+          </div>
+          <div class="turn-section">
+            <div class="turn-section-title">Response (truncated)</div>
+            <div class="turn-text">${t.responseText}</div>
+          </div>
+          <div class="turn-section">
+            <div class="turn-section-title">Token Breakdown</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px">
+              <div><span style="color:var(--text-dim);font-size:11px">Input</span><br><span style="color:#fff">${t.inputTokens.toLocaleString()}</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Output</span><br><span style="color:#fff">${t.outputTokens.toLocaleString()}</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Cache Read</span><br><span style="color:#fff">${t.cacheRead.toLocaleString()}</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Cache Create</span><br><span style="color:#fff">${t.cacheCreate.toLocaleString()}</span></div>
+            </div>
+          </div>
+          <div class="turn-section">
+            <div class="turn-section-title">Chain of Custody</div>
+            <div class="turn-hashes">
+              <div class="hash-box"><div class="hl">Request Hash</div><div class="hv">${t.reqHash}</div></div>
+              <div class="hash-box"><div class="hl">Response Hash</div><div class="hv">${t.respHash}</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px">
+              <div><span style="color:var(--text-dim);font-size:11px">TTFB</span><br><span style="color:#fff">${t.ttfbMs}ms</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Stop Reason</span><br><span style="color:#fff">${t.stopReason}</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Transport</span><br><span style="color:#fff">${t.transport}</span></div>
+              <div><span style="color:var(--text-dim);font-size:11px">Capture</span><br><span style="color:${t.captureComplete ? 'var(--green)' : 'var(--red)'}">${t.captureComplete ? 'complete' : 'incomplete'}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Pagination
+  const pag = document.getElementById('pagination');
+  let pagHtml = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>Prev</button>`;
+  for (let p = 1; p <= totalPages; p++) {
+    if (totalPages <= 7 || p <= 2 || p >= totalPages - 1 || Math.abs(p - currentPage) <= 1) {
+      pagHtml += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+    } else if (p === 3 && currentPage > 4) {
+      pagHtml += `<span class="page-info">...</span>`;
+    } else if (p === totalPages - 2 && currentPage < totalPages - 3) {
+      pagHtml += `<span class="page-info">...</span>`;
+    }
+  }
+  pagHtml += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Next</button>`;
+  pagHtml += `<span class="page-info">Showing ${start+1}-${Math.min(start+TURNS_PER_PAGE, turns.length)} of ${turns.length} turns</span>`;
+  pag.innerHTML = pagHtml;
+}
+
+function goPage(p) {
+  const turns = getTurns(currentSessionId);
+  const totalPages = Math.ceil(turns.length / TURNS_PER_PAGE);
+  if (p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderTurns();
+  document.getElementById('turns-container').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function toggleTurn(el) {
+  const body = el.querySelector('.turn-body');
+  body.classList.toggle('open');
+}
+
+// Back button
+document.getElementById('session-back').addEventListener('click', () => {
+  document.getElementById('session-list').classList.remove('hidden');
+  document.getElementById('session-detail').classList.remove('active');
+});
+
+// Session row clicks
+document.querySelectorAll('.session-row').forEach(row => {
+  row.addEventListener('click', () => openSession(row.getAttribute('data-session')));
+});
+
+// ==================== LIVE FEED ====================
+
+const providers = [
+  { name: 'Anthropic', class: 'tag-anthropic', models: ['opus-4', 'sonnet-4', 'haiku-4'] },
+  { name: 'OpenAI', class: 'tag-openai', models: ['o3', 'gpt-4.1', 'o4-mini'] },
+  { name: 'Gemini', class: 'tag-gemini', models: ['gemini-2.5', 'gemini-2.0-flash'] }
+];
+const frameworks = ['claude-code', 'cursor', 'codex', 'aider'];
+const intents = [
+  'refactor the authentication middleware to...',
+  'add unit tests for the capture pipeline...',
+  'fix race condition in websocket relay...',
+  'implement retry logic with exponential...',
+  'migrate database schema to support new...',
+  'optimize query performance for session...',
+  'add OpenTelemetry tracing to the gatew...',
+  'review and fix security vulnerabilities...',
+  'implement rate limiting for API endpoin...',
+  'create integration tests for S3 object...',
+  'debug TLS handshake failure with corpor...',
+  'generate TypeScript types from Rust str...'
+];
+
+function addFeedItem() {
+  const feed = document.getElementById('feed-items');
+  const p = providers[Math.floor(Math.random() * providers.length)];
+  const model = p.models[Math.floor(Math.random() * p.models.length)];
+  const fw = frameworks[Math.floor(Math.random() * frameworks.length)];
+  const intent = intents[Math.floor(Math.random() * intents.length)];
+  const tokens = Math.floor(Math.random() * 20000) + 1000;
+  const cost = (tokens * (model.includes('opus') ? 0.00003 : model.includes('o3') ? 0.000015 : 0.000008)).toFixed(2);
+  const now = new Date();
+  const time = now.toTimeString().slice(0, 8);
+  const status = Math.random() > 0.95 ? '<span class="tag-pill tag-warn">429</span>' : '<span class="tag-pill tag-ok">200</span>';
+
+  const div = document.createElement('div');
+  div.className = 'feed-item new';
+  div.innerHTML = `
+    <span class="mono">${time}</span>
+    <span><span class="tag-pill ${p.class}">${p.name}</span></span>
+    <span class="mono">${model}</span>
+    <span style="color:var(--text)">${fw} &middot; "${intent}"</span>
+    <span class="mono">${tokens.toLocaleString()}</span>
+    <span style="color:#fff">$${cost}</span>
+    <span>${status}</span>
+  `;
+  feed.insertBefore(div, feed.firstChild);
+  if (feed.children.length > 20) feed.removeChild(feed.lastChild);
+}
+
+setInterval(addFeedItem, 3000 + Math.random() * 4000);
+
+// Filter buttons (visual toggle only)
+document.querySelectorAll('.filters').forEach(group => {
+  group.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+});
+</script>
+</body>
+</html>

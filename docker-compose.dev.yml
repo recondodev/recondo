@@ -1,0 +1,48 @@
+name: recondo
+
+services:
+  ministack:
+    image: ministackorg/ministack:1.3.25
+    ports:
+      - "4566:4566"
+    healthcheck:
+      # MiniStack image has BusyBox nc (no -z flag) but does have netstat.
+      test: ["CMD-SHELL", "netstat -ln | grep -q :4566"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ministack-init:
+    image: amazon/aws-cli:2.30.5
+    depends_on:
+      ministack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://ministack:4566
+    entrypoint: ["sh", "/init.sh"]
+    volumes:
+      - ./deploy/local-dev/init-aws.sh:/init.sh:ro
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: recondo
+      POSTGRES_USER: recondo
+      POSTGRES_PASSWORD: recondo_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/local-dev/init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recondo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

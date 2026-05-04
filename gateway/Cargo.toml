@@ -1,0 +1,110 @@
+[package]
+name = "recondo-gateway"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+flate2 = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
+anyhow = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.24"
+aws-sdk-s3 = { version = "1", optional = true }
+aws-config = { version = "1", optional = true }
+# Containerized AWS workloads: glibc 2.34+ on Amazon Linux 2023 + the
+# hyper-util default HttpConnector trips a netlink/getaddrinfo race
+# returning EBUSY ("Device or resource busy") on every S3 operation,
+# even though curl/getent/std::net resolve fine. Replace the SDK's
+# default HTTP client with hickory-dns (pure-Rust resolver, no glibc,
+# no netlink). Same code path works against real AWS S3 — hickory is
+# strictly better than the default in any environment. See
+# aws-sdk-rust#1242, rust-lang/rust#114914.
+aws-smithy-runtime = { version = "1", features = ["connector-hyper-0-14-x"], optional = true }
+aws-smithy-runtime-api = { version = "1", optional = true }
+hickory-resolver = { version = "0.24", features = ["tokio-runtime"], optional = true }
+hyper-rustls-014 = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["http1", "http2", "webpki-roots", "tls12"], optional = true }
+hyper-014 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2"], optional = true }
+tower = { version = "0.4", optional = true }
+deadpool-postgres = { version = "0.14", optional = true }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"], optional = true }
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-pemfile = "2"
+webpki-roots = "1"
+getrandom = "0.3"
+hex = "0.4"
+lru = "0.12"
+pem = "3"
+x509-parser = "0.16"
+serde_yaml = "0.9"
+toml = "0.8"
+# Sprint P1B: base64 decode for inline attachment extraction (Anthropic
+# image blocks, Gemini inlineData, OpenAI data-URL images). Kept minimal;
+# MIME sniffing is done via magic-byte prefixes rather than a separate crate.
+base64 = "0.22"
+# Sprint P1B: URL parsing for SSRF validation on external-image rehosting.
+url = "2"
+# Sprint P1B: fetch external image URLs (OpenAI non-data-URL case) with
+# configurable timeout and redirect cap. Promoted out of dev-dependencies.
+reqwest = "0.12"
+# FIND-1-7 (round 2): cross-process advisory file lock for recovery
+# serialization. The CLI `reprocess` and the gateway's startup-recovery
+# hook both acquire `<data_dir>/.recovery.lock` to prevent concurrent
+# recovery runs (between an ops-mistake `recondo reprocess` against a
+# running daemon, between two parallel `reprocess` invocations, or
+# between two startup boots sharing a data dir).
+fs2 = "0.4"
+
+[features]
+test-support = []
+postgres = ["dep:deadpool-postgres", "dep:tokio-postgres"]
+# FIND-9-F: postgres-tests must imply test-support so that tests
+# gated on `feature = "postgres-tests"` (e.g. PG stress tests in
+# attachment_scoping_tests) compile when only `--features
+# postgres-tests` is passed. Previously these tests reached into
+# `recondo_gateway::storage::object::LocalObjectStore` and other
+# items behind the test-support gate, so passing only postgres-tests
+# (without manually adding test-support) failed to compile and
+# silently dropped tests from the run.
+postgres-tests = ["postgres", "test-support"]
+s3 = [
+  "dep:aws-sdk-s3",
+  "dep:aws-config",
+  "dep:aws-smithy-runtime",
+  "dep:aws-smithy-runtime-api",
+  "dep:hickory-resolver",
+  "dep:hyper-rustls-014",
+  "dep:hyper-014",
+  "dep:tower",
+]
+s3-tests = ["s3"]
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"
+# Ephemeral docker containers for integration tests — replaces the
+# `just dev-infra` external dependency. Each test binary spawns its
+# own postgres / ministack container via `tests/common/pg_container.rs`
+# and `tests/common/s3_container.rs`.
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+# Process-exit destructor to force-stop testcontainer instances on
+# normal binary termination. Required because Rust's `Drop` is NOT
+# called for `static` values at process exit, so the `OnceLock`-held
+# `PgInstance` / `S3Instance` would leak their containers without a
+# `#[dtor]` hook to drive cleanup.
+ctor = "0.5"
