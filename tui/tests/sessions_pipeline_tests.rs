@@ -272,6 +272,58 @@ async fn poll_sessions_once_returns_none_on_fetch_error() {
 // The marshalling fn `marshal_sessions` should produce a SessionRow with at
 // least the id field populated.
 
+// ---------- build_sessions_variables: period → started_after ----------
+
+#[test]
+fn build_sessions_variables_uses_period_for_started_after() {
+    use recondo_tui::app::state::SessionsQueryVars;
+    use recondo_tui::app::time_window::TimeWindow;
+    use recondo_tui::gql::marshal::build_sessions_variables;
+
+    let vars = SessionsQueryVars {
+        filter: Default::default(),
+        period: TimeWindow::Week,
+        limit: 20,
+        offset: 0,
+    };
+    let q_vars = build_sessions_variables(vars);
+    let f = q_vars.filter.expect("filter should be present");
+    assert!(
+        f.started_after.is_some(),
+        "period TimeWindow::Week must produce started_after"
+    );
+    // Approximate sanity: started_after should be in the past (within ~14 days).
+    let now = chrono::Utc::now();
+    let started = f.started_after.unwrap();
+    assert!(started < now);
+    let diff = now - started;
+    assert!(
+        diff.num_days() >= 13 && diff.num_days() <= 15,
+        "Week → ~14 days back, got {} days",
+        diff.num_days()
+    );
+}
+
+#[test]
+fn build_sessions_variables_period_all_is_none() {
+    use recondo_tui::app::state::SessionsQueryVars;
+    use recondo_tui::app::time_window::TimeWindow;
+    use recondo_tui::gql::marshal::build_sessions_variables;
+
+    let vars = SessionsQueryVars {
+        filter: Default::default(),
+        period: TimeWindow::All,
+        limit: 20,
+        offset: 0,
+    };
+    let q_vars = build_sessions_variables(vars);
+    let f = q_vars.filter.expect("filter should be present");
+    assert!(
+        f.started_after.is_none(),
+        "TimeWindow::All means no lower bound"
+    );
+}
+
 fn build_fake_sessions_response() -> recondo_tui::gql::queries::sessions::ResponseData {
     use recondo_tui::gql::queries::sessions as q;
     q::ResponseData {

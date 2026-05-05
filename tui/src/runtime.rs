@@ -10,6 +10,7 @@ use recondo_tui::app::lens_update::LensUpdate;
 use recondo_tui::app::state::{AppState, SessionsQueryVars};
 use recondo_tui::config::Config;
 use recondo_tui::error::Result;
+use recondo_tui::gql::marshal::build_sessions_variables;
 use recondo_tui::gql::queries::{sessions as q_sessions, Sessions};
 use recondo_tui::lenses::realtime::RealtimeSnapshot;
 use recondo_tui::poll::sessions::poll_sessions_once;
@@ -164,20 +165,6 @@ async fn fetch_sessions(
     vars: SessionsQueryVars,
 ) -> std::result::Result<q_sessions::ResponseData, recondo_tui::error::AppError> {
     let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
-    let q_vars = q_sessions::Variables {
-        filter: Some(q_sessions::SessionFilter {
-            provider: vars.filter.provider,
-            model: vars.filter.model,
-            project_id: vars.filter.project,
-            started_after: None,
-            started_before: None,
-            status: None,
-            framework: vars.filter.framework,
-            search: None,
-            hide_non_llm: None,
-        }),
-        limit: Some(vars.limit),
-        offset: Some(vars.offset),
-    };
+    let q_vars = build_sessions_variables(vars);
     client.query::<Sessions>(q_vars).await
 }

@@ -28,12 +28,16 @@ fn rows() -> Vec<SessionRow> {
 fn sort_cycle_advances_then_reverses() {
     let mut lens = SessionsLens::with_rows(rows());
     assert_eq!(lens.sort_key(), SortKey::Recency);
+    // Default is descending (newest/highest first) so `sort_descending()` is
+    // true; the bool now honestly reflects the sort direction.
+    assert!(lens.sort_descending());
     lens.cycle_sort();
     assert_eq!(lens.sort_key(), SortKey::Cost);
     lens.cycle_sort();
     assert_eq!(lens.sort_key(), SortKey::Turns);
+    let before = lens.sort_descending();
     lens.cycle_sort_reverse();
-    assert!(lens.sort_descending());
+    assert_ne!(lens.sort_descending(), before, "Shift+O toggles direction");
 }
 
 #[test]

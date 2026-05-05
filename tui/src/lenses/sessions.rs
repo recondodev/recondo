@@ -67,14 +67,20 @@ impl SessionsLens {
         Self {
             rows,
             sort: SortKey::Recency,
-            descending: false,
+            // Default to descending so the natural "newest/highest first"
+            // ordering applies for Recency / Cost / Turns. The user toggles
+            // direction with `O` (CycleSortReverse).
+            descending: true,
             selected: 0,
             filter: SessionFilter::default(),
             filter_open: false,
         }
     }
 
-    /// Bulk-replace all rows. Resets selection to the top.
+    /// Bulk-replace all rows. Resets selection to the top. The `descending`
+    /// flag is intentionally NOT reset — that would silently clobber the
+    /// user's `O` toggle on every 10s poll. Initial direction is set in
+    /// `with_rows` / `new`.
     pub fn set_rows(&mut self, rows: Vec<SessionRow>) {
         self.rows = rows;
         self.selected = 0;
@@ -178,21 +184,16 @@ impl SessionsLens {
             .filter(|r| self.filter.model.as_deref().is_none_or(|m| r.model == m))
             .collect();
         v.sort_by(|a, b| {
-            // Default direction puts the most natural value first for each key:
-            //   Recency  → newest started_at first (desc by string)
-            //   Cost     → highest cost first (desc)
-            //   Turns    → most turns first (desc)
-            //   Model    → ascending alphabetical
-            //   Framework → ascending alphabetical
-            // The `descending` flag (named for the legacy "Shift+O reverses"
-            // toggle) flips this default direction.
+            // Comparator returns ascending order for every key; the
+            // `descending` flag (set true by default in `with_rows`) reverses
+            // it so Recency / Cost / Turns show newest / highest first.
             let ord = match self.sort {
-                SortKey::Recency => b.started_at.cmp(&a.started_at),
-                SortKey::Cost => b
+                SortKey::Recency => a.started_at.cmp(&b.started_at),
+                SortKey::Cost => a
                     .cost
-                    .partial_cmp(&a.cost)
+                    .partial_cmp(&b.cost)
                     .unwrap_or(std::cmp::Ordering::Equal),
-                SortKey::Turns => b.turns.cmp(&a.turns),
+                SortKey::Turns => a.turns.cmp(&b.turns),
                 SortKey::Model => a.model.cmp(&b.model),
                 SortKey::Framework => a.framework.cmp(&b.framework),
             };
