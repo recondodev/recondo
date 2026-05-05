@@ -52,6 +52,18 @@ impl SessionDetailLens {
         self.selected = self.selected.saturating_sub(1);
     }
 
+    pub fn select_top(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn select_bottom(&mut self) {
+        if self.turns.is_empty() {
+            self.selected = 0;
+        } else {
+            self.selected = self.turns.len() - 1;
+        }
+    }
+
     pub fn selected_turn_id(&self) -> Option<&str> {
         self.turns.get(self.selected).map(|t| t.id.as_str())
     }

@@ -11,7 +11,7 @@ use recondo_tui::config::Config;
 use recondo_tui::error::Result;
 use recondo_tui::lenses::realtime::RealtimeSnapshot;
 use recondo_tui::poll::{spawn_loop, PollIntervals};
-use recondo_tui::ui::draw::{draw_app, UiCache};
+use recondo_tui::ui::draw::draw_app;
 use std::io::stdout;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -25,14 +25,6 @@ pub async fn run(cfg: Config) -> Result<()> {
     execute!(out, EnterAlternateScreen)?;
     let mut term = Terminal::new(CrosstermBackend::new(out))?;
     let mut state = AppState::new();
-    let mut cache = UiCache {
-        realtime: None,
-        sessions: None,
-        cost: None,
-        agents: None,
-        session_detail: None,
-        turn_detail: None,
-    };
 
     // Spawn realtime stats polling. The fallback `RealtimeSnapshot { healthy: false, .. }`
     // when a fetch fails is acceptable here: this is display-time data, not capture data.
@@ -67,9 +59,9 @@ pub async fn run(cfg: Config) -> Result<()> {
 
     while !state.should_quit() {
         while let Ok(snap) = rx.try_recv() {
-            cache.realtime = Some(snap);
+            state.realtime_mut().set_snapshot(snap);
         }
-        term.draw(|f| draw_app(f, &state, Some(&cache)))?;
+        term.draw(|f| draw_app(f, &state))?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(k) = event::read()? {
                 let action = dispatch_key(k, state.mode());

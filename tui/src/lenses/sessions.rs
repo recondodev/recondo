@@ -52,7 +52,17 @@ pub struct SessionsLens {
     filter_open: bool,
 }
 
+impl Default for SessionsLens {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionsLens {
+    pub fn new() -> Self {
+        Self::with_rows(vec![])
+    }
+
     pub fn with_rows(rows: Vec<SessionRow>) -> Self {
         Self {
             rows,
@@ -62,6 +72,12 @@ impl SessionsLens {
             filter: SessionFilter::default(),
             filter_open: false,
         }
+    }
+
+    /// Bulk-replace all rows. Resets selection to the top.
+    pub fn set_rows(&mut self, rows: Vec<SessionRow>) {
+        self.rows = rows;
+        self.selected = 0;
     }
 
     pub fn sort_key(&self) -> SortKey {
@@ -121,6 +137,19 @@ impl SessionsLens {
 
     pub fn select_prev(&mut self) {
         self.selected = self.selected.saturating_sub(1);
+    }
+
+    pub fn select_top(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn select_bottom(&mut self) {
+        let n = self.rows_sorted().len();
+        if n > 0 {
+            self.selected = n - 1;
+        } else {
+            self.selected = 0;
+        }
     }
 
     pub fn rows_sorted(&self) -> Vec<&SessionRow> {

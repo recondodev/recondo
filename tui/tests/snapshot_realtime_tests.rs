@@ -82,9 +82,10 @@ fn realtime_lens_renders_feed_rows_and_filter_cycle() {
     let mut lens = RealtimeLens::with_snapshot(snap);
     lens.cycle_provider_filter();
     assert_eq!(lens.provider_filter.as_deref(), Some("anthropic"));
-    lens.cycle_provider_filter();
-    assert_eq!(lens.provider_filter.as_deref(), Some("openai"));
 
+    // After Chunk 1: provider_filter actually narrows the rendered rows. The
+    // fixture rows are all `anthropic`, so cycling once leaves them visible
+    // and we can assert on the row data alongside the filter chip.
     let backend = TestBackend::new(120, 30);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| lens.draw(f, f.area())).unwrap();
@@ -97,7 +98,7 @@ fn realtime_lens_renders_feed_rows_and_filter_cycle() {
         .collect();
     assert!(dump.contains("12:00"));
     assert!(dump.contains("claude-3-5-sonnet"));
-    assert!(dump.contains("filter: openai"));
+    assert!(dump.contains("filter: anthropic"));
 }
 
 // ---------- Task 11 ----------

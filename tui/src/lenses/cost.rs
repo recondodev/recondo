@@ -23,6 +23,13 @@ pub struct BreakdownRow {
     pub sessions: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CostPane {
+    Header,
+    Breakdown,
+    Sparkline,
+}
+
 pub struct CostLens {
     group: GroupBy,
     total: f64,
@@ -30,6 +37,7 @@ pub struct CostLens {
     breakdown: Vec<BreakdownRow>,
     daily: Vec<f64>,
     selected: usize,
+    focused: CostPane,
 }
 
 impl Default for CostLens {
@@ -47,7 +55,20 @@ impl CostLens {
             breakdown: vec![],
             daily: vec![],
             selected: 0,
+            focused: CostPane::Breakdown,
         }
+    }
+
+    pub fn focused_pane(&self) -> CostPane {
+        self.focused
+    }
+
+    pub fn cycle_focus(&mut self) {
+        self.focused = match self.focused {
+            CostPane::Header => CostPane::Breakdown,
+            CostPane::Breakdown => CostPane::Sparkline,
+            CostPane::Sparkline => CostPane::Header,
+        };
     }
 
     pub fn group_by(&self) -> GroupBy {
@@ -90,6 +111,18 @@ impl CostLens {
 
     pub fn select_prev(&mut self) {
         self.selected = self.selected.saturating_sub(1);
+    }
+
+    pub fn select_top(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn select_bottom(&mut self) {
+        if self.breakdown.is_empty() {
+            self.selected = 0;
+        } else {
+            self.selected = self.breakdown.len() - 1;
+        }
     }
 
     pub fn selected_key(&self) -> Option<&str> {

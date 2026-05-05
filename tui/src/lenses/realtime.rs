@@ -45,18 +45,48 @@ pub struct RealtimeSnapshot {
     pub rows: Vec<FeedRow>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealtimePane {
+    Cards,
+    Feed,
+}
+
 pub struct RealtimeLens {
     snapshot: RealtimeSnapshot,
     pub provider_filter: Option<String>,
     pub selected_row: usize,
+    focused: RealtimePane,
+}
+
+impl Default for RealtimeLens {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RealtimeLens {
+    pub fn new() -> Self {
+        Self::with_snapshot(RealtimeSnapshot {
+            healthy: false,
+            port: 8443,
+            active_providers: 0,
+            active_sessions: 0,
+            user_turns_per_min: 0,
+            tokens_last_hour: 0.0,
+            cost_last_hour: 0.0,
+            p50_ms: None,
+            p99_ms: None,
+            sample_count: 0,
+            rows: vec![],
+        })
+    }
+
     pub fn with_snapshot(snapshot: RealtimeSnapshot) -> Self {
         Self {
             snapshot,
             provider_filter: None,
             selected_row: 0,
+            focused: RealtimePane::Cards,
         }
     }
 
@@ -68,6 +98,66 @@ impl RealtimeLens {
         self.snapshot = s;
     }
 
+    /// Bulk-replace the live feed rows. Resets row selection to the top.
+    pub fn set_rows(&mut self, rows: Vec<FeedRow>) {
+        self.snapshot.rows = rows;
+        self.selected_row = 0;
+    }
+
+    pub fn provider_filter(&self) -> Option<&str> {
+        self.provider_filter.as_deref()
+    }
+
+    pub fn focused_pane(&self) -> RealtimePane {
+        self.focused
+    }
+
+    pub fn cycle_focus(&mut self) {
+        self.focused = match self.focused {
+            RealtimePane::Cards => RealtimePane::Feed,
+            RealtimePane::Feed => RealtimePane::Cards,
+        };
+    }
+
+    /// Returns the rows visible after applying `provider_filter`.
+    pub fn visible_rows(&self) -> Vec<&FeedRow> {
+        self.snapshot
+            .rows
+            .iter()
+            .filter(|r| {
+                self.provider_filter
+                    .as_deref()
+                    .is_none_or(|p| r.provider == p)
+            })
+            .collect()
+    }
+
+    pub fn select_next(&mut self) {
+        let len = self.visible_rows().len();
+        if len == 0 {
+            self.selected_row = 0;
+            return;
+        }
+        self.selected_row = (self.selected_row + 1).min(len - 1);
+    }
+
+    pub fn select_prev(&mut self) {
+        self.selected_row = self.selected_row.saturating_sub(1);
+    }
+
+    pub fn select_top(&mut self) {
+        self.selected_row = 0;
+    }
+
+    pub fn select_bottom(&mut self) {
+        let n = self.visible_rows().len();
+        if n > 0 {
+            self.selected_row = n - 1;
+        } else {
+            self.selected_row = 0;
+        }
+    }
+
     pub fn cycle_provider_filter(&mut self) {
         self.provider_filter = match self.provider_filter.as_deref() {
             None => Some("anthropic".into()),
@@ -75,6 +165,8 @@ impl RealtimeLens {
             Some("openai") => Some("gemini".into()),
             _ => None,
         };
+        // Reset selection so it stays in-range relative to the new visible set.
+        self.selected_row = 0;
     }
 
     pub fn draw(&self, f: &mut Frame<'_>, area: Rect) {
@@ -155,14 +247,12 @@ impl RealtimeLens {
             cards[4],
         );
 
-        // Feed table.
-        // Provider filter is reflected in the User Turns / Min card subtitle
-        // ("filter: <name>") but does not remove rows from the live feed —
-        // operators want to see all activity even while a filter narrows
-        // a downstream view.
+        // Feed table — rows are filtered by `provider_filter`. The filter is
+        // also reflected in the User Turns / Min card subtitle as
+        // "filter: <name>" so operators see both the active narrowing and the
+        // resulting row set together.
         let visible: Vec<Vec<String>> = self
-            .snapshot
-            .rows
+            .visible_rows()
             .iter()
             .map(|r| {
                 vec![

@@ -28,11 +28,22 @@ pub struct TopRow {
     pub cost: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentsPane {
+    Cards,
+    Chart,
+    Devs,
+    Repos,
+}
+
 pub struct AgentsLens {
     summary: AgentSummaryStats,
     framework: Vec<FrameworkSlice>,
     top_devs: Vec<TopRow>,
     top_repos: Vec<TopRow>,
+    focused: AgentsPane,
+    selected_dev: usize,
+    selected_repo: usize,
 }
 
 impl Default for AgentsLens {
@@ -48,6 +59,63 @@ impl AgentsLens {
             framework: vec![],
             top_devs: vec![],
             top_repos: vec![],
+            focused: AgentsPane::Cards,
+            selected_dev: 0,
+            selected_repo: 0,
+        }
+    }
+
+    pub fn focused_pane(&self) -> AgentsPane {
+        self.focused
+    }
+
+    pub fn cycle_focus(&mut self) {
+        self.focused = match self.focused {
+            AgentsPane::Cards => AgentsPane::Chart,
+            AgentsPane::Chart => AgentsPane::Devs,
+            AgentsPane::Devs => AgentsPane::Repos,
+            AgentsPane::Repos => AgentsPane::Cards,
+        };
+    }
+
+    /// Selection-cursor advance, only meaningful when focused on a table pane.
+    pub fn select_next(&mut self) {
+        match self.focused {
+            AgentsPane::Devs if !self.top_devs.is_empty() => {
+                self.selected_dev = (self.selected_dev + 1).min(self.top_devs.len() - 1);
+            }
+            AgentsPane::Repos if !self.top_repos.is_empty() => {
+                self.selected_repo = (self.selected_repo + 1).min(self.top_repos.len() - 1);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        match self.focused {
+            AgentsPane::Devs => self.selected_dev = self.selected_dev.saturating_sub(1),
+            AgentsPane::Repos => self.selected_repo = self.selected_repo.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    pub fn select_top(&mut self) {
+        match self.focused {
+            AgentsPane::Devs => self.selected_dev = 0,
+            AgentsPane::Repos => self.selected_repo = 0,
+            _ => {}
+        }
+    }
+
+    pub fn select_bottom(&mut self) {
+        match self.focused {
+            AgentsPane::Devs if !self.top_devs.is_empty() => {
+                self.selected_dev = self.top_devs.len() - 1;
+            }
+            AgentsPane::Repos if !self.top_repos.is_empty() => {
+                self.selected_repo = self.top_repos.len() - 1;
+            }
+            _ => {}
         }
     }
     pub fn set_summary(&mut self, s: AgentSummaryStats) {
@@ -141,7 +209,7 @@ impl AgentsLens {
                     Constraint::Length(10),
                     Constraint::Length(10),
                 ],
-                selected: 0,
+                selected: self.selected_dev,
                 title: "Top Developers",
             },
             halves[0],
@@ -160,7 +228,7 @@ impl AgentsLens {
                     Constraint::Length(10),
                     Constraint::Length(10),
                 ],
-                selected: 0,
+                selected: self.selected_repo,
                 title: "Top Repositories",
             },
             halves[1],
