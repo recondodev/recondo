@@ -1,3 +1,4 @@
+pub mod cost;
 pub mod realtime;
 pub mod session_detail;
 pub mod sessions;
