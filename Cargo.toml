@@ -1,5 +1,5 @@
 [workspace]
-members = ["gateway", "xtask"]
+members = ["gateway", "tui", "xtask"]
 resolver = "2"
 
 # Centralized lint configuration. Member crates opt in with:
