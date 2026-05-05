@@ -26,11 +26,13 @@ pub fn parse_window(s: &str) -> Option<TimeWindow> {
 }
 
 /// GraphQL Period enum value (string form expected by the API).
+///
+/// Must stay in sync with the `Period` enum in `tui/graphql/schema.graphql`.
 pub fn period_for_window(w: TimeWindow) -> &'static str {
     match w {
-        TimeWindow::Today => "TODAY",
-        TimeWindow::Week => "WEEK",
-        TimeWindow::Month => "MONTH",
-        TimeWindow::All => "ALL_TIME",
+        TimeWindow::Today => "DAY_1",
+        TimeWindow::Week => "DAY_7",
+        TimeWindow::Month => "DAY_30",
+        TimeWindow::All => "DAY_90",
     }
 }
