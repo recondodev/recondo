@@ -7,15 +7,25 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use recondo_tui::app::keymap::{dispatch_key, KeyAction};
 use recondo_tui::app::lens_update::LensUpdate;
-use recondo_tui::app::state::{AppState, SessionsQueryVars};
+use recondo_tui::app::state::{
+    AppState, CostBreakdownQueryVars, CostDailyQueryVars, CostTotalQueryVars, SessionsQueryVars,
+};
 use recondo_tui::config::Config;
 use recondo_tui::error::Result;
 use recondo_tui::gql::marshal::build_sessions_variables;
 use recondo_tui::gql::queries::{
-    session_detail as q_session_detail, sessions as q_sessions, turn as q_turn, SessionDetail,
-    Sessions, Turn,
+    daily_spend as q_daily_spend, session_detail as q_session_detail, sessions as q_sessions,
+    spend_by_framework as q_spend_by_framework, spend_by_model as q_spend_by_model,
+    spend_by_provider as q_spend_by_provider, turn as q_turn, usage_summary as q_usage_summary,
+    DailySpend, SessionDetail, Sessions, SpendByFramework, SpendByModel, SpendByProvider, Turn,
+    UsageSummary,
 };
+use recondo_tui::lenses::cost::GroupBy;
 use recondo_tui::lenses::realtime::RealtimeSnapshot;
+use recondo_tui::poll::cost::{
+    poll_cost_breakdown_framework_once, poll_cost_breakdown_model_once, poll_cost_breakdown_once,
+    poll_cost_daily_once, poll_cost_total_once,
+};
 use recondo_tui::poll::session_detail::poll_session_detail_once;
 use recondo_tui::poll::sessions::poll_sessions_once;
 use recondo_tui::poll::turn_detail::poll_turn_detail_once;
@@ -172,6 +182,128 @@ pub async fn run(cfg: Config) -> Result<()> {
             })
         };
 
+    // Cost-breakdown polling. Watch channel carries Option<vars>: None means
+    // the user is not on the Cost lens, so the task skips the tick. The runtime
+    // dispatches on the GroupBy variant because each spend_by_* query module
+    // produces a distinct ResponseData type — sibling poll fns keep each path
+    // type-checked end-to-end.
+    let (cost_breakdown_vars_tx, mut cost_breakdown_vars_rx) =
+        watch::channel::<Option<CostBreakdownQueryVars>>(state.cost_breakdown_query_vars());
+    let _cost_breakdown_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(15));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = cost_breakdown_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *cost_breakdown_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = match vars.group {
+                    GroupBy::Provider => {
+                        poll_cost_breakdown_once(vars, |v| async move {
+                            fetch_spend_by_provider(&url, &api_key, v).await
+                        })
+                        .await
+                    }
+                    GroupBy::Model => {
+                        poll_cost_breakdown_model_once(vars, |v| async move {
+                            fetch_spend_by_model(&url, &api_key, v).await
+                        })
+                        .await
+                    }
+                    GroupBy::Framework => {
+                        poll_cost_breakdown_framework_once(vars, |v| async move {
+                            fetch_spend_by_framework(&url, &api_key, v).await
+                        })
+                        .await
+                    }
+                };
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    // Cost-total polling (usage summary).
+    let (cost_total_vars_tx, mut cost_total_vars_rx) =
+        watch::channel::<Option<CostTotalQueryVars>>(state.cost_total_query_vars());
+    let _cost_total_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(15));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = cost_total_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *cost_total_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_cost_total_once(vars, |v| async move {
+                    fetch_usage_summary(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    // Cost-daily polling (sparkline).
+    let (cost_daily_vars_tx, mut cost_daily_vars_rx) =
+        watch::channel::<Option<CostDailyQueryVars>>(state.cost_daily_query_vars());
+    let _cost_daily_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = cost_daily_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *cost_daily_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_cost_daily_once(vars, |v| async move {
+                    fetch_daily_spend(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
     while !state.should_quit() {
         while let Ok(snap) = rx.try_recv() {
             state.realtime_mut().set_snapshot(snap);
@@ -197,6 +329,11 @@ pub async fn run(cfg: Config) -> Result<()> {
                 // drill happens.
                 let _ = sd_id_tx.send(state.session_detail_fetch_id());
                 let _ = td_id_tx.send(state.turn_detail_fetch_id());
+                // Cost vars are Option<...> — None when the active lens is
+                // not Cost, which the polling tasks treat as "skip tick".
+                let _ = cost_breakdown_vars_tx.send(state.cost_breakdown_query_vars());
+                let _ = cost_total_vars_tx.send(state.cost_total_query_vars());
+                let _ = cost_daily_vars_tx.send(state.cost_daily_query_vars());
             }
         }
     }
@@ -273,4 +410,124 @@ async fn fetch_turn(
     let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
     let q_vars = q_turn::Variables { id };
     client.query::<Turn>(q_vars).await
+}
+
+// ---- Cost fetchers ----------------------------------------------------------
+//
+// Each query module gets its own copy of the GraphQL `Period` enum (graphql_client
+// emits per-module enum copies). The mapping helpers stay near the fetchers so
+// the relationship `TimeWindow → Period(of-this-query)` is local and explicit.
+
+fn period_for_provider(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_spend_by_provider::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_spend_by_provider::Period::DAY_1,
+        TimeWindow::Week => q_spend_by_provider::Period::DAY_7,
+        TimeWindow::Month => q_spend_by_provider::Period::DAY_30,
+        TimeWindow::All => q_spend_by_provider::Period::DAY_90,
+    }
+}
+
+fn period_for_model(w: recondo_tui::app::time_window::TimeWindow) -> q_spend_by_model::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_spend_by_model::Period::DAY_1,
+        TimeWindow::Week => q_spend_by_model::Period::DAY_7,
+        TimeWindow::Month => q_spend_by_model::Period::DAY_30,
+        TimeWindow::All => q_spend_by_model::Period::DAY_90,
+    }
+}
+
+fn period_for_framework(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_spend_by_framework::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_spend_by_framework::Period::DAY_1,
+        TimeWindow::Week => q_spend_by_framework::Period::DAY_7,
+        TimeWindow::Month => q_spend_by_framework::Period::DAY_30,
+        TimeWindow::All => q_spend_by_framework::Period::DAY_90,
+    }
+}
+
+fn period_for_usage_summary(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_usage_summary::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_usage_summary::Period::DAY_1,
+        TimeWindow::Week => q_usage_summary::Period::DAY_7,
+        TimeWindow::Month => q_usage_summary::Period::DAY_30,
+        TimeWindow::All => q_usage_summary::Period::DAY_90,
+    }
+}
+
+async fn fetch_spend_by_provider(
+    url: &str,
+    api_key: &Option<String>,
+    vars: CostBreakdownQueryVars,
+) -> std::result::Result<q_spend_by_provider::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_spend_by_provider::Variables {
+        period: Some(period_for_provider(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<SpendByProvider>(q_vars).await
+}
+
+async fn fetch_spend_by_model(
+    url: &str,
+    api_key: &Option<String>,
+    vars: CostBreakdownQueryVars,
+) -> std::result::Result<q_spend_by_model::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_spend_by_model::Variables {
+        period: Some(period_for_model(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<SpendByModel>(q_vars).await
+}
+
+async fn fetch_spend_by_framework(
+    url: &str,
+    api_key: &Option<String>,
+    vars: CostBreakdownQueryVars,
+) -> std::result::Result<q_spend_by_framework::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_spend_by_framework::Variables {
+        period: Some(period_for_framework(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<SpendByFramework>(q_vars).await
+}
+
+async fn fetch_usage_summary(
+    url: &str,
+    api_key: &Option<String>,
+    vars: CostTotalQueryVars,
+) -> std::result::Result<q_usage_summary::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_usage_summary::Variables {
+        period: Some(period_for_usage_summary(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<UsageSummary>(q_vars).await
+}
+
+async fn fetch_daily_spend(
+    url: &str,
+    api_key: &Option<String>,
+    vars: CostDailyQueryVars,
+) -> std::result::Result<q_daily_spend::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_daily_spend::Variables {
+        days: Some(vars.days as i64),
+    };
+    client.query::<DailySpend>(q_vars).await
 }

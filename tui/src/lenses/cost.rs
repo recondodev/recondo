@@ -83,6 +83,22 @@ impl CostLens {
         };
     }
 
+    pub fn breakdown(&self) -> &[BreakdownRow] {
+        &self.breakdown
+    }
+
+    pub fn total(&self) -> f64 {
+        self.total
+    }
+
+    pub fn delta(&self) -> Option<f64> {
+        self.delta
+    }
+
+    pub fn daily(&self) -> &[f64] {
+        &self.daily
+    }
+
     pub fn set_total(&mut self, total: f64, delta: Option<f64>) {
         self.total = total;
         self.delta = delta;

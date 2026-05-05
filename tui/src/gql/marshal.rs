@@ -8,7 +8,11 @@
 
 use crate::app::state::SessionsQueryVars;
 use crate::app::time_window::{days_for_window, TimeWindow};
-use crate::gql::queries::{session_detail, sessions, turn};
+use crate::gql::queries::{
+    daily_spend, session_detail, sessions, spend_by_framework, spend_by_model, spend_by_provider,
+    turn, usage_summary,
+};
+use crate::lenses::cost::BreakdownRow;
 use crate::lenses::session_detail::{SessionDetailLens, TurnRow};
 use crate::lenses::sessions::SessionRow;
 use crate::lenses::turn_detail::TurnDetailLens;
@@ -78,6 +82,64 @@ pub fn marshal_turn_detail(resp: turn::ResponseData) -> Option<TurnDetailLens> {
             .map(|tc| format!("- {}: {}", tc.name, tc.input.unwrap_or_default()))
             .collect(),
     })
+}
+
+/// Marshal a `SpendByProvider` GraphQL response into breakdown rows. Schema
+/// field types: `name: String!`, `costUsd: Float!`, `count: Int!`. The Int
+/// codegen type is `i64`; we saturate to `i32::MAX` to fit `BreakdownRow`'s
+/// display-side `i32` session count without panicking on absurd values.
+pub fn marshal_spend_by_provider(resp: spend_by_provider::ResponseData) -> Vec<BreakdownRow> {
+    resp.spend_by_provider
+        .into_iter()
+        .map(|c| BreakdownRow {
+            key: c.name.clone(),
+            label: c.name,
+            cost: c.cost_usd,
+            sessions: i32::try_from(c.count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
+/// Marshal a `SpendByModel` GraphQL response into breakdown rows.
+pub fn marshal_spend_by_model(resp: spend_by_model::ResponseData) -> Vec<BreakdownRow> {
+    resp.spend_by_model
+        .into_iter()
+        .map(|c| BreakdownRow {
+            key: c.name.clone(),
+            label: c.name,
+            cost: c.cost_usd,
+            sessions: i32::try_from(c.count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
+/// Marshal a `SpendByFramework` GraphQL response into breakdown rows.
+pub fn marshal_spend_by_framework(resp: spend_by_framework::ResponseData) -> Vec<BreakdownRow> {
+    resp.spend_by_framework
+        .into_iter()
+        .map(|c| BreakdownRow {
+            key: c.name.clone(),
+            label: c.name,
+            cost: c.cost_usd,
+            sessions: i32::try_from(c.count).unwrap_or(i32::MAX),
+        })
+        .collect()
+}
+
+/// Marshal a `DailySpend` GraphQL response into the float-per-day vector
+/// the sparkline expects. The schema reuses `SpendByCategory`; we project
+/// to `cost_usd` only — the `name` (day label) is unused by the v1 widget.
+pub fn marshal_daily_spend(resp: daily_spend::ResponseData) -> Vec<f64> {
+    resp.daily_spend.into_iter().map(|c| c.cost_usd).collect()
+}
+
+/// Marshal a `UsageSummary` GraphQL response into `(total, delta)`. Schema
+/// declares `averageCostDelta: Float!` (non-nullable), so we always wrap in
+/// `Some` — the lens still models delta as Option to support the existing
+/// "no chip" rendering path when polling has not run yet.
+pub fn marshal_usage_summary(resp: usage_summary::ResponseData) -> (f64, Option<f64>) {
+    let s = resp.usage_summary;
+    (s.total_cost_usd, Some(s.average_cost_delta))
 }
 
 /// Build the codegen `sessions::Variables` from the TUI-shaped

@@ -6,7 +6,7 @@ use crate::app::selection::SelectionRegistry;
 use crate::app::tabs::PinnedTabs;
 use crate::app::time_window::TimeWindow;
 use crate::lenses::agents::AgentsLens;
-use crate::lenses::cost::{drill_target, CostLens};
+use crate::lenses::cost::{drill_target, CostLens, GroupBy};
 use crate::lenses::realtime::RealtimeLens;
 use crate::lenses::session_detail::SessionDetailLens;
 use crate::lenses::sessions::{SessionFilter, SessionsLens};
@@ -24,6 +24,29 @@ pub struct SessionsQueryVars {
     pub period: TimeWindow,
     pub limit: i64,
     pub offset: i64,
+}
+
+/// Variables describing the next Cost-breakdown GraphQL query. The polling
+/// task uses `group` to dispatch between `spendByProvider`, `spendByModel`,
+/// or `spendByFramework`; `period` is mapped through `period_for_window` to
+/// the GraphQL `Period` enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CostBreakdownQueryVars {
+    pub group: GroupBy,
+    pub period: TimeWindow,
+}
+
+/// Variables describing the next Cost-daily GraphQL query. `dailySpend(days)`
+/// expects an integer day count; we derive it from the active TimeWindow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CostDailyQueryVars {
+    pub days: i32,
+}
+
+/// Variables describing the next Cost-total GraphQL query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CostTotalQueryVars {
+    pub period: TimeWindow,
 }
 
 pub struct AppState {
@@ -128,7 +151,42 @@ impl AppState {
             LensUpdate::Sessions(rows) => self.sessions.set_rows(rows),
             LensUpdate::SessionDetail(sd) => self.session_detail = Some(sd),
             LensUpdate::TurnDetail(td) => self.turn_detail = Some(td),
+            LensUpdate::CostBreakdown(rows) => self.cost.set_breakdown(rows),
+            LensUpdate::CostTotal(total, delta) => self.cost.set_total(total, delta),
+            LensUpdate::CostDaily(values) => self.cost.set_daily(values),
         }
+    }
+
+    /// Returns the cost-breakdown query variables when Cost is the active lens.
+    /// `None` outside the Cost lens — the polling task will skip the tick.
+    pub fn cost_breakdown_query_vars(&self) -> Option<CostBreakdownQueryVars> {
+        if !matches!(self.history.current(), Lens::Cost) {
+            return None;
+        }
+        Some(CostBreakdownQueryVars {
+            group: self.cost.group_by(),
+            period: self.window,
+        })
+    }
+
+    /// Returns the cost-daily query variables when Cost is the active lens.
+    pub fn cost_daily_query_vars(&self) -> Option<CostDailyQueryVars> {
+        if !matches!(self.history.current(), Lens::Cost) {
+            return None;
+        }
+        Some(CostDailyQueryVars {
+            days: crate::app::time_window::days_for_window(self.window),
+        })
+    }
+
+    /// Returns the cost-total query variables when Cost is the active lens.
+    pub fn cost_total_query_vars(&self) -> Option<CostTotalQueryVars> {
+        if !matches!(self.history.current(), Lens::Cost) {
+            return None;
+        }
+        Some(CostTotalQueryVars {
+            period: self.window,
+        })
     }
 
     /// Returns the session id to fetch when SessionDetail is the active lens.
