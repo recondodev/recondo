@@ -447,3 +447,17 @@ clean:
 # Build and open docs in browser
 doc:
     cd gateway && cargo doc --no-deps --open
+
+# ---------- TUI ----------
+
+# Build the recondo-tui crate
+tui-build:
+    cd tui && cargo build
+
+# Run the recondo-tui binary (pass args after `--`)
+tui-run *ARGS:
+    cd tui && cargo run -- {{ARGS}}
+
+# Run TUI tests via nextest (matches the workspace test runner)
+tui-test:
+    cd tui && cargo nextest run
