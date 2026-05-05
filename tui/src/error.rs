@@ -14,6 +14,11 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("config: {0}")]
     Config(String),
+    #[error("invalid api key: {source}")]
+    InvalidApiKey {
+        #[from]
+        source: reqwest::header::InvalidHeaderValue,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
