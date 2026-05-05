@@ -8,7 +8,8 @@
 //! state (sessions, cost, agents, realtime, session_detail, turn_detail) and
 //! exposes accessors. The implementer will land that refactor in Chunk 1.
 
-use recondo_tui::app::keymap::KeyAction;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use recondo_tui::app::keymap::{dispatch_key, KeyAction, Mode};
 use recondo_tui::app::lens::Lens;
 use recondo_tui::app::selection::GroupKey;
 use recondo_tui::app::state::AppState;
@@ -245,13 +246,20 @@ fn shift_g_jumps_selection_to_last_row() {
 }
 
 #[test]
-fn lowercase_g_on_cost_cycles_group_by() {
+fn lowercase_g_on_cost_cycles_group_by_via_keymap() {
     use recondo_tui::lenses::cost::GroupBy;
     let mut s = AppState::new();
     s.handle(KeyAction::OpenCost);
     assert_eq!(s.cost().group_by(), GroupBy::Provider);
-    s.handle(KeyAction::CycleGroupBy);
+
+    // Drive through the full keymap → handle path that a real keystroke takes.
+    let g_key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
+    let action = dispatch_key(g_key, Mode::Normal);
+    s.handle(action);
     assert_eq!(s.cost().group_by(), GroupBy::Model);
+
+    s.handle(dispatch_key(g_key, Mode::Normal));
+    assert_eq!(s.cost().group_by(), GroupBy::Framework);
 }
 
 #[test]

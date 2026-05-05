@@ -34,7 +34,6 @@ pub enum KeyAction {
     CycleSort,
     CycleSortReverse,
     CycleFilter,
-    CycleGroupBy,
     PinTab,
     JumpTab(u8),
     PaletteInput(char),

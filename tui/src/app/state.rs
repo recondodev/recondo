@@ -182,11 +182,6 @@ impl AppState {
                 }
             }
             (Mode::Normal, CycleFilter) => self.dispatch_cycle_filter(),
-            (Mode::Normal, CycleGroupBy) => {
-                if matches!(self.history.current(), Lens::Cost) {
-                    self.cost.cycle_group_by();
-                }
-            }
             (Mode::Normal, CycleFocus) => self.dispatch_cycle_focus(),
             (Mode::Normal, Drill) => self.dispatch_drill(),
             (Mode::Normal, Pop) => self.dispatch_pop(),
@@ -255,7 +250,9 @@ impl AppState {
     fn dispatch_top(&mut self) {
         match self.history.current() {
             Lens::Sessions => self.sessions.select_top(),
-            Lens::Cost => self.cost.select_top(),
+            // Cost lens: `g` cycles group-by (advertised in `[g] group:` chip
+            // and help overlay) instead of jumping selection to top.
+            Lens::Cost => self.cost.cycle_group_by(),
             Lens::Realtime => self.realtime.select_top(),
             Lens::SessionDetail => {
                 if let Some(sd) = self.session_detail.as_mut() {
