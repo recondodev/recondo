@@ -14,8 +14,8 @@ pub struct Modal<'a> {
 
 impl<'a> Widget for Modal<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let w = (area.width as f32 * 0.6) as u16;
-        let h = (area.height as f32 * 0.4) as u16;
+        let w = area.width.saturating_mul(6) / 10;
+        let h = area.height.saturating_mul(4) / 10;
         let x = area.x + area.width.saturating_sub(w) / 2;
         let y = area.y + area.height.saturating_sub(h) / 2;
         let r = Rect::new(x, y, w, h);

@@ -47,7 +47,7 @@ pub struct SessionsLens {
     rows: Vec<SessionRow>,
     sort: SortKey,
     descending: bool,
-    pub selected: usize,
+    selected: usize,
     filter: SessionFilter,
     filter_open: bool,
 }
@@ -106,7 +106,33 @@ impl SessionsLens {
         &self.filter
     }
 
+    pub fn selected(&self) -> usize {
+        self.selected
+    }
+
+    pub fn select_next(&mut self) {
+        let len = self.rows_sorted().len();
+        if len == 0 {
+            self.selected = 0;
+            return;
+        }
+        self.selected = (self.selected + 1).min(len - 1);
+    }
+
+    pub fn select_prev(&mut self) {
+        self.selected = self.selected.saturating_sub(1);
+    }
+
     pub fn rows_sorted(&self) -> Vec<&SessionRow> {
+        // NOTE: Only `framework` and `model` filters are enforced here.
+        // `SessionFilter::provider` and `SessionFilter::project` are stored on
+        // the filter struct (and surfaced in the filter modal) but currently
+        // have no corresponding fields on `SessionRow`, which mirrors the
+        // GraphQL `Session` shape. Task 14+/Task 22 will either extend
+        // `SessionRow` once GraphQL exposes `Session.provider` /
+        // `Session.project`, or drop these dimensions from `SessionFilter`.
+        // The filter modal annotates these as "(not yet enforced)" so users
+        // see the limitation rather than a silent no-op.
         let mut v: Vec<&SessionRow> = self
             .rows
             .iter()
@@ -172,7 +198,7 @@ impl SessionsLens {
                     title: "Filter",
                     body: vec![
                         format!(
-                            "Provider:  {}",
+                            "Provider:  {} (not yet enforced)",
                             self.filter.provider.as_deref().unwrap_or("any")
                         ),
                         format!(
@@ -184,7 +210,7 @@ impl SessionsLens {
                             self.filter.framework.as_deref().unwrap_or("any")
                         ),
                         format!(
-                            "Project:   {}",
+                            "Project:   {} (not yet enforced)",
                             self.filter.project.as_deref().unwrap_or("any")
                         ),
                         "[Esc] close   [Enter] apply".into(),
