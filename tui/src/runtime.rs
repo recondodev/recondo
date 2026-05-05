@@ -22,7 +22,7 @@ pub async fn run(cfg: Config) -> Result<()> {
 
     enable_raw_mode()?;
     let mut out = stdout();
-    execute!(out, EnterAlternateScreen).ok();
+    execute!(out, EnterAlternateScreen)?;
     let mut term = Terminal::new(CrosstermBackend::new(out))?;
     let mut state = AppState::new();
     let mut cache = UiCache {
@@ -96,20 +96,26 @@ async fn fetch_realtime_snapshot(url: &str, api_key: &Option<String>) -> Result<
         .await?
         .realtime_stats;
     // graphql_client maps GraphQL `Int` to `i64`; the TUI snapshot uses `i32`
-    // for counts and `i64` only for the per-minute turn metric. The `as`
-    // casts here are saturating for display purposes — see the note in
-    // `RealtimeSnapshot`. Acceptable because this is display-only data.
+    // for counts and `i64` only for the per-minute turn metric. We saturate
+    // i64 -> i32 via `try_from(...).unwrap_or(i32::MAX)` so values above
+    // `i32::MAX` clamp to the maximum instead of wrapping (`as i32` would
+    // truncate with two's-complement wrap). Acceptable for display-only
+    // counts that won't realistically exceed ~10^4.
     Ok(RealtimeSnapshot {
         healthy: true,
         port: 8443,
-        active_providers: stats.active_provider_count as i32,
-        active_sessions: stats.active_sessions as i32,
+        active_providers: i32::try_from(stats.active_provider_count).unwrap_or(i32::MAX),
+        active_sessions: i32::try_from(stats.active_sessions).unwrap_or(i32::MAX),
         user_turns_per_min: stats.user_turns_per_minute,
         tokens_last_hour: stats.tokens_last_hour,
         cost_last_hour: stats.cost_last_hour,
-        p50_ms: stats.latency_p50_ms.map(|v| v as i32),
-        p99_ms: stats.latency_p99_ms.map(|v| v as i32),
-        sample_count: stats.latency_sample_count as i32,
+        p50_ms: stats
+            .latency_p50_ms
+            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
+        p99_ms: stats
+            .latency_p99_ms
+            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
+        sample_count: i32::try_from(stats.latency_sample_count).unwrap_or(i32::MAX),
         rows: vec![],
     })
 }
