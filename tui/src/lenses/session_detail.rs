@@ -41,7 +41,8 @@ impl SessionDetailLens {
     }
 
     /// Sets the fuzzy search filter applied to turn rows. An empty /
-    /// whitespace-only needle clears the filter.
+    /// whitespace-only needle clears the filter. Resets selection to 0 to
+    /// avoid a stale OOB index against the newly filtered set.
     pub fn set_search_filter(&mut self, needle: Option<String>) {
         self.search_filter = needle.and_then(|s| {
             let t = s.trim();
@@ -51,6 +52,7 @@ impl SessionDetailLens {
                 Some(t.to_string())
             }
         });
+        self.selected = 0;
     }
 
     pub fn search_filter(&self) -> Option<&str> {
@@ -76,11 +78,12 @@ impl SessionDetailLens {
     }
 
     pub fn select_next(&mut self) {
-        if self.turns.is_empty() {
+        let len = self.visible_turns().len();
+        if len == 0 {
             self.selected = 0;
             return;
         }
-        self.selected = (self.selected + 1).min(self.turns.len() - 1);
+        self.selected = (self.selected + 1).min(len - 1);
     }
 
     pub fn select_prev(&mut self) {
@@ -92,15 +95,24 @@ impl SessionDetailLens {
     }
 
     pub fn select_bottom(&mut self) {
-        if self.turns.is_empty() {
+        let len = self.visible_turns().len();
+        if len == 0 {
             self.selected = 0;
         } else {
-            self.selected = self.turns.len() - 1;
+            self.selected = len - 1;
         }
     }
 
     pub fn selected_turn_id(&self) -> Option<&str> {
-        self.turns.get(self.selected).map(|t| t.id.as_str())
+        self.visible_turns()
+            .get(self.selected)
+            .map(|t| t.id.as_str())
+    }
+
+    /// Sets the selection cursor to the position of the turn with the given id
+    /// within the (unfiltered) turns list. Falls back to 0 if not found.
+    pub fn set_selected_to_id(&mut self, id: &str) {
+        self.selected = self.turns.iter().position(|t| t.id == id).unwrap_or(0);
     }
 
     pub fn turns(&self) -> &[TurnRow] {
@@ -122,7 +134,7 @@ impl SessionDetailLens {
             chunks[0],
         );
         let display: Vec<Vec<String>> = self
-            .turns
+            .visible_turns()
             .iter()
             .map(|t| {
                 vec![

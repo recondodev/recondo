@@ -233,3 +233,205 @@ fn submit_in_search_applies_filter_to_realtime_feed() {
     assert_eq!(visible.len(), 1, "search 'cl' filters out openai/gpt-4 row");
     assert_eq!(visible[0].provider, "anthropic");
 }
+
+// ---------- D-Q5 (extended): SessionDetail / Agents top devs / refresh preservation ----------
+
+#[test]
+fn submit_in_search_applies_filter_to_session_detail_lens() {
+    use recondo_tui::lenses::session_detail::{SessionDetailLens, TurnRow};
+    let mut s = AppState::new();
+    s.apply_update(LensUpdate::Sessions(vec![
+        recondo_tui::lenses::sessions::SessionRow {
+            id: "ses_a".into(),
+            started_at: "12:00".into(),
+            model: "x".into(),
+            framework: "x".into(),
+            turns: 3,
+            cost: 0.0,
+        },
+    ]));
+    s.handle(KeyAction::OpenSessions);
+
+    // Seed the SessionDetail lens via apply_update (the production path).
+    let sd = SessionDetailLens::new(
+        "ses_a".into(),
+        vec![
+            TurnRow {
+                id: "trn_1".into(),
+                sequence: 1,
+                model: "claude-3-5-sonnet".into(),
+                prompt_tokens: 100,
+                completion_tokens: 200,
+                cost: 0.05,
+                tool_calls: 0,
+            },
+            TurnRow {
+                id: "trn_2".into(),
+                sequence: 2,
+                model: "gpt-4o".into(),
+                prompt_tokens: 150,
+                completion_tokens: 300,
+                cost: 0.10,
+                tool_calls: 1,
+            },
+            TurnRow {
+                id: "trn_3".into(),
+                sequence: 3,
+                model: "claude-3-haiku".into(),
+                prompt_tokens: 200,
+                completion_tokens: 400,
+                cost: 0.20,
+                tool_calls: 2,
+            },
+        ],
+        None,
+    );
+    s.apply_update(LensUpdate::SessionDetail(sd));
+    s.handle(KeyAction::Drill); // Sessions → SessionDetail
+
+    s.handle(KeyAction::OpenSearch);
+    for c in "cl".chars() {
+        s.handle(KeyAction::SearchInput(c));
+    }
+    s.handle(KeyAction::Submit);
+
+    let sd = s.session_detail().expect("session_detail populated");
+    let visible = sd.visible_turns();
+    assert!(visible.iter().any(|t| t.id == "trn_1"));
+    assert!(visible.iter().any(|t| t.id == "trn_3"));
+    assert!(
+        !visible.iter().any(|t| t.id == "trn_2"),
+        "gpt-4o should be filtered out by fuzzy 'cl'"
+    );
+}
+
+#[test]
+fn submit_in_search_applies_filter_to_agents_top_devs() {
+    let mut s = AppState::new();
+    s.handle(KeyAction::OpenAgents);
+    s.apply_update(LensUpdate::AgentsTopDevs(vec![
+        recondo_tui::lenses::agents::TopRow {
+            label: "andmer".into(),
+            sessions: 14,
+            cost: 6.20,
+        },
+        recondo_tui::lenses::agents::TopRow {
+            label: "alice".into(),
+            sessions: 10,
+            cost: 4.0,
+        },
+        recondo_tui::lenses::agents::TopRow {
+            label: "bob".into(),
+            sessions: 5,
+            cost: 2.0,
+        },
+    ]));
+    s.handle(KeyAction::OpenSearch);
+    for c in "an".chars() {
+        s.handle(KeyAction::SearchInput(c));
+    }
+    s.handle(KeyAction::Submit);
+    let visible = s.agents().visible_top_devs();
+    assert!(visible.iter().any(|r| r.label == "andmer"));
+    assert!(
+        !visible.iter().any(|r| r.label == "bob"),
+        "bob should be filtered out"
+    );
+}
+
+#[test]
+fn polled_session_detail_refresh_preserves_search_filter() {
+    use recondo_tui::lenses::session_detail::{SessionDetailLens, TurnRow};
+    let mut s = AppState::new();
+    s.apply_update(LensUpdate::Sessions(vec![
+        recondo_tui::lenses::sessions::SessionRow {
+            id: "ses_a".into(),
+            started_at: "12:00".into(),
+            model: "x".into(),
+            framework: "x".into(),
+            turns: 2,
+            cost: 0.0,
+        },
+    ]));
+    s.handle(KeyAction::OpenSessions);
+    s.handle(KeyAction::Drill);
+
+    let sd1 = SessionDetailLens::new(
+        "ses_a".into(),
+        vec![
+            TurnRow {
+                id: "trn_1".into(),
+                sequence: 1,
+                model: "claude-3-5".into(),
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                cost: 0.0,
+                tool_calls: 0,
+            },
+            TurnRow {
+                id: "trn_2".into(),
+                sequence: 2,
+                model: "gpt".into(),
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                cost: 0.0,
+                tool_calls: 0,
+            },
+        ],
+        None,
+    );
+    s.apply_update(LensUpdate::SessionDetail(sd1));
+
+    s.handle(KeyAction::OpenSearch);
+    for c in "cl".chars() {
+        s.handle(KeyAction::SearchInput(c));
+    }
+    s.handle(KeyAction::Submit);
+    assert_eq!(
+        s.session_detail().unwrap().visible_turns().len(),
+        1,
+        "filter applied"
+    );
+
+    // Now simulate a polling refresh.
+    let sd2 = SessionDetailLens::new(
+        "ses_a".into(),
+        vec![
+            TurnRow {
+                id: "trn_1".into(),
+                sequence: 1,
+                model: "claude-3-5".into(),
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                cost: 0.0,
+                tool_calls: 0,
+            },
+            TurnRow {
+                id: "trn_2".into(),
+                sequence: 2,
+                model: "gpt".into(),
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                cost: 0.0,
+                tool_calls: 0,
+            },
+            TurnRow {
+                id: "trn_3".into(),
+                sequence: 3,
+                model: "claude-haiku".into(),
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                cost: 0.0,
+                tool_calls: 0,
+            },
+        ],
+        None,
+    );
+    s.apply_update(LensUpdate::SessionDetail(sd2));
+    let visible = s.session_detail().unwrap().visible_turns();
+    assert_eq!(
+        visible.len(),
+        2,
+        "filter preserved after refresh: 2 claude rows visible"
+    );
+}

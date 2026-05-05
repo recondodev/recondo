@@ -63,7 +63,9 @@ impl CostLens {
     }
 
     /// Sets the fuzzy search filter applied to the breakdown rows.
-    /// An empty / whitespace-only needle clears the filter.
+    /// An empty / whitespace-only needle clears the filter. Resets the
+    /// selection cursor to 0 to avoid a stale OOB index against the newly
+    /// filtered set.
     pub fn set_search_filter(&mut self, needle: Option<String>) {
         self.search_filter = needle.and_then(|s| {
             let t = s.trim();
@@ -73,6 +75,7 @@ impl CostLens {
                 Some(t.to_string())
             }
         });
+        self.selected = 0;
     }
 
     pub fn search_filter(&self) -> Option<&str> {
@@ -149,11 +152,12 @@ impl CostLens {
     }
 
     pub fn select_next(&mut self) {
-        if self.breakdown.is_empty() {
+        let len = self.visible_breakdown().len();
+        if len == 0 {
             self.selected = 0;
             return;
         }
-        self.selected = (self.selected + 1).min(self.breakdown.len() - 1);
+        self.selected = (self.selected + 1).min(len - 1);
     }
 
     pub fn select_prev(&mut self) {
@@ -165,15 +169,18 @@ impl CostLens {
     }
 
     pub fn select_bottom(&mut self) {
-        if self.breakdown.is_empty() {
+        let len = self.visible_breakdown().len();
+        if len == 0 {
             self.selected = 0;
         } else {
-            self.selected = self.breakdown.len() - 1;
+            self.selected = len - 1;
         }
     }
 
     pub fn selected_key(&self) -> Option<&str> {
-        self.breakdown.get(self.selected).map(|r| r.key.as_str())
+        self.visible_breakdown()
+            .get(self.selected)
+            .map(|r| r.key.as_str())
     }
 
     pub fn draw(&self, f: &mut Frame<'_>, area: Rect) {

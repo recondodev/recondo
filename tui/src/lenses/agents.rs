@@ -69,7 +69,9 @@ impl AgentsLens {
     }
 
     /// Sets the fuzzy search filter applied to top devs / top repos.
-    /// An empty / whitespace-only needle clears the filter.
+    /// An empty / whitespace-only needle clears the filter. Resets both
+    /// selection cursors to 0 to avoid a stale OOB index against the newly
+    /// filtered sets.
     pub fn set_search_filter(&mut self, needle: Option<String>) {
         self.search_filter = needle.and_then(|s| {
             let t = s.trim();
@@ -79,6 +81,8 @@ impl AgentsLens {
                 Some(t.to_string())
             }
         });
+        self.selected_dev = 0;
+        self.selected_repo = 0;
     }
 
     pub fn search_filter(&self) -> Option<&str> {
@@ -120,11 +124,17 @@ impl AgentsLens {
     /// Selection-cursor advance, only meaningful when focused on a table pane.
     pub fn select_next(&mut self) {
         match self.focused {
-            AgentsPane::Devs if !self.top_devs.is_empty() => {
-                self.selected_dev = (self.selected_dev + 1).min(self.top_devs.len() - 1);
+            AgentsPane::Devs => {
+                let len = self.visible_top_devs().len();
+                if len > 0 {
+                    self.selected_dev = (self.selected_dev + 1).min(len - 1);
+                }
             }
-            AgentsPane::Repos if !self.top_repos.is_empty() => {
-                self.selected_repo = (self.selected_repo + 1).min(self.top_repos.len() - 1);
+            AgentsPane::Repos => {
+                let len = self.visible_top_repos().len();
+                if len > 0 {
+                    self.selected_repo = (self.selected_repo + 1).min(len - 1);
+                }
             }
             _ => {}
         }
@@ -148,11 +158,17 @@ impl AgentsLens {
 
     pub fn select_bottom(&mut self) {
         match self.focused {
-            AgentsPane::Devs if !self.top_devs.is_empty() => {
-                self.selected_dev = self.top_devs.len() - 1;
+            AgentsPane::Devs => {
+                let len = self.visible_top_devs().len();
+                if len > 0 {
+                    self.selected_dev = len - 1;
+                }
             }
-            AgentsPane::Repos if !self.top_repos.is_empty() => {
-                self.selected_repo = self.top_repos.len() - 1;
+            AgentsPane::Repos => {
+                let len = self.visible_top_repos().len();
+                if len > 0 {
+                    self.selected_repo = len - 1;
+                }
             }
             _ => {}
         }

@@ -157,7 +157,19 @@ impl AppState {
     pub fn apply_update(&mut self, update: LensUpdate) {
         match update {
             LensUpdate::Sessions(rows) => self.sessions.set_rows(rows),
-            LensUpdate::SessionDetail(sd) => self.session_detail = Some(sd),
+            LensUpdate::SessionDetail(mut sd) => {
+                if let Some(prior) = self.session_detail.as_ref() {
+                    let prior_filter = prior.search_filter().map(String::from);
+                    let prior_selected_id = prior.selected_turn_id().map(String::from);
+                    if prior_filter.is_some() {
+                        sd.set_search_filter(prior_filter);
+                    }
+                    if let Some(id) = prior_selected_id {
+                        sd.set_selected_to_id(&id);
+                    }
+                }
+                self.session_detail = Some(sd);
+            }
             LensUpdate::TurnDetail(td) => self.turn_detail = Some(td),
             LensUpdate::CostBreakdown(rows) => self.cost.set_breakdown(rows),
             LensUpdate::CostTotal(total, delta) => self.cost.set_total(total, delta),
