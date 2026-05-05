@@ -17,16 +17,16 @@ use recondo_tui::gql::marshal::build_sessions_variables;
 use recondo_tui::gql::queries::{
     agent_framework_distribution as q_agent_framework_distribution,
     agent_summary as q_agent_summary, daily_spend as q_daily_spend,
-    session_detail as q_session_detail, sessions as q_sessions,
+    gateway_status as q_gateway_status, realtime_feed as q_realtime_feed,
+    realtime_stats as q_realtime_stats, session_detail as q_session_detail, sessions as q_sessions,
     spend_by_framework as q_spend_by_framework, spend_by_model as q_spend_by_model,
     spend_by_provider as q_spend_by_provider, top_developers as q_top_developers,
     top_repositories as q_top_repositories, turn as q_turn, usage_summary as q_usage_summary,
-    AgentFrameworkDistribution, AgentSummary, DailySpend, SessionDetail, Sessions,
-    SpendByFramework, SpendByModel, SpendByProvider, TopDevelopers, TopRepositories, Turn,
-    UsageSummary,
+    AgentFrameworkDistribution, AgentSummary, DailySpend, GatewayStatus, RealtimeFeed,
+    RealtimeStats, SessionDetail, Sessions, SpendByFramework, SpendByModel, SpendByProvider,
+    TopDevelopers, TopRepositories, Turn, UsageSummary,
 };
 use recondo_tui::lenses::cost::GroupBy;
-use recondo_tui::lenses::realtime::RealtimeSnapshot;
 use recondo_tui::poll::agents::{
     poll_agent_framework_distribution_once, poll_agent_summary_once, poll_top_developers_once,
     poll_top_repositories_once,
@@ -35,14 +35,18 @@ use recondo_tui::poll::cost::{
     poll_cost_breakdown_framework_once, poll_cost_breakdown_model_once, poll_cost_breakdown_once,
     poll_cost_daily_once, poll_cost_total_once,
 };
+use recondo_tui::poll::realtime::{
+    poll_gateway_status_once, poll_realtime_feed_once, poll_realtime_stats_once,
+};
 use recondo_tui::poll::session_detail::poll_session_detail_once;
 use recondo_tui::poll::sessions::poll_sessions_once;
 use recondo_tui::poll::turn_detail::poll_turn_detail_once;
-use recondo_tui::poll::{spawn_loop, PollIntervals};
+use recondo_tui::poll::PollIntervals;
 use recondo_tui::ui::draw::draw_app;
 use std::io::stdout;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
+use tokio::time::interval;
 
 pub async fn run(cfg: Config) -> Result<()> {
     let url = cfg.api_url.clone();
@@ -54,36 +58,13 @@ pub async fn run(cfg: Config) -> Result<()> {
     let mut term = Terminal::new(CrosstermBackend::new(out))?;
     let mut state = AppState::new();
 
-    // Spawn realtime stats polling. The fallback `RealtimeSnapshot { healthy: false, .. }`
-    // when a fetch fails is acceptable here: this is display-time data, not capture data.
-    // Operators see "OFFLINE" in the status pill and zeroed metrics until the API recovers.
+    // The realtime lens is fed by three independent polling tasks (stats /
+    // feed / status). Each writes a partial-update LensUpdate variant via
+    // the shared update channel — so a 5s feed refresh never clobbers cards
+    // and a 15s status refresh never clobbers feed rows. Failed fetches
+    // produce no update; operators see "OFFLINE" + stale data until the
+    // API recovers.
     let intervals = PollIntervals::default();
-    let (tx, mut rx) = mpsc::channel::<RealtimeSnapshot>(8);
-    let _stats_task = {
-        let url = url.clone();
-        let api_key = api_key.clone();
-        spawn_loop(intervals.stats_secs, tx.clone(), move || {
-            let url = url.clone();
-            let api_key = api_key.clone();
-            async move {
-                fetch_realtime_snapshot(&url, &api_key)
-                    .await
-                    .unwrap_or_else(|_| RealtimeSnapshot {
-                        healthy: false,
-                        port: 8443,
-                        active_providers: 0,
-                        active_sessions: 0,
-                        user_turns_per_min: 0,
-                        tokens_last_hour: 0.0,
-                        cost_last_hour: 0.0,
-                        p50_ms: None,
-                        p99_ms: None,
-                        sample_count: 0,
-                        rows: vec![],
-                    })
-            }
-        })
-    };
 
     // Sessions polling. The watch channel carries the latest query vars so
     // changes from the main loop (filter modal apply, palette window switch,
@@ -93,6 +74,81 @@ pub async fn run(cfg: Config) -> Result<()> {
     let initial_session_vars = state.sessions_query_vars();
     let (vars_tx, vars_rx) = watch::channel(initial_session_vars);
     let (update_tx, mut update_rx) = mpsc::channel::<LensUpdate>(16);
+
+    // Realtime stats task — 5s cadence, partial update via RealtimeStats.
+    let _realtime_stats_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        let secs = intervals.stats_secs;
+        tokio::spawn(async move {
+            let mut tk = interval(Duration::from_secs(secs));
+            loop {
+                tk.tick().await;
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_realtime_stats_once(|_| async move {
+                    fetch_realtime_stats(&url, &api_key).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    // Realtime feed task — 5s cadence, partial update via RealtimeFeed.
+    let _realtime_feed_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        let secs = intervals.feed_secs;
+        tokio::spawn(async move {
+            let mut tk = interval(Duration::from_secs(secs));
+            loop {
+                tk.tick().await;
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_realtime_feed_once(|_| async move {
+                    fetch_realtime_feed(&url, &api_key).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    // Gateway status task — 15s cadence, partial update via GatewayStatus.
+    let _gateway_status_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        let secs = intervals.status_secs;
+        tokio::spawn(async move {
+            let mut tk = interval(Duration::from_secs(secs));
+            loop {
+                tk.tick().await;
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_gateway_status_once(|_| async move {
+                    fetch_gateway_status(&url, &api_key).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
     let _sessions_task = {
         let url = url.clone();
         let api_key = api_key.clone();
@@ -449,9 +505,6 @@ pub async fn run(cfg: Config) -> Result<()> {
     };
 
     while !state.should_quit() {
-        while let Ok(snap) = rx.try_recv() {
-            state.realtime_mut().set_snapshot(snap);
-        }
         while let Ok(update) = update_rx.try_recv() {
             state.apply_update(update);
         }
@@ -493,37 +546,42 @@ pub async fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
-async fn fetch_realtime_snapshot(url: &str, api_key: &Option<String>) -> Result<RealtimeSnapshot> {
+/// One-shot RealtimeStats GraphQL fetch.
+async fn fetch_realtime_stats(
+    url: &str,
+    api_key: &Option<String>,
+) -> std::result::Result<q_realtime_stats::ResponseData, recondo_tui::error::AppError> {
     let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
-    let stats = client
-        .query::<recondo_tui::gql::queries::RealtimeStats>(
-            recondo_tui::gql::queries::realtime_stats::Variables {},
-        )
-        .await?
-        .realtime_stats;
-    // graphql_client maps GraphQL `Int` to `i64`; the TUI snapshot uses `i32`
-    // for counts and `i64` only for the per-minute turn metric. We saturate
-    // i64 -> i32 via `try_from(...).unwrap_or(i32::MAX)` so values above
-    // `i32::MAX` clamp to the maximum instead of wrapping (`as i32` would
-    // truncate with two's-complement wrap). Acceptable for display-only
-    // counts that won't realistically exceed ~10^4.
-    Ok(RealtimeSnapshot {
-        healthy: true,
-        port: 8443,
-        active_providers: i32::try_from(stats.active_provider_count).unwrap_or(i32::MAX),
-        active_sessions: i32::try_from(stats.active_sessions).unwrap_or(i32::MAX),
-        user_turns_per_min: stats.user_turns_per_minute,
-        tokens_last_hour: stats.tokens_last_hour,
-        cost_last_hour: stats.cost_last_hour,
-        p50_ms: stats
-            .latency_p50_ms
-            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
-        p99_ms: stats
-            .latency_p99_ms
-            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
-        sample_count: i32::try_from(stats.latency_sample_count).unwrap_or(i32::MAX),
-        rows: vec![],
-    })
+    client
+        .query::<RealtimeStats>(q_realtime_stats::Variables {})
+        .await
+}
+
+/// One-shot RealtimeFeed GraphQL fetch. `provider`/`limit` left None so the
+/// API returns its default cap; provider filtering is applied client-side
+/// in the lens after marshalling.
+async fn fetch_realtime_feed(
+    url: &str,
+    api_key: &Option<String>,
+) -> std::result::Result<q_realtime_feed::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    client
+        .query::<RealtimeFeed>(q_realtime_feed::Variables {
+            provider: None,
+            limit: None,
+        })
+        .await
+}
+
+/// One-shot GatewayStatus GraphQL fetch.
+async fn fetch_gateway_status(
+    url: &str,
+    api_key: &Option<String>,
+) -> std::result::Result<q_gateway_status::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    client
+        .query::<GatewayStatus>(q_gateway_status::Variables {})
+        .await
 }
 
 /// One-shot Sessions GraphQL fetch. Translates `SessionsQueryVars` (the lens

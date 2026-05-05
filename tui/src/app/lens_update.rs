@@ -2,6 +2,7 @@
 
 use crate::lenses::agents::{AgentSummaryStats, FrameworkSlice, TopRow};
 use crate::lenses::cost::BreakdownRow;
+use crate::lenses::realtime::FeedRow;
 use crate::lenses::session_detail::SessionDetailLens;
 use crate::lenses::sessions::SessionRow;
 use crate::lenses::turn_detail::TurnDetailLens;
@@ -22,5 +23,23 @@ pub enum LensUpdate {
     AgentsFrameworkDist(Vec<FrameworkSlice>),
     AgentsTopDevs(Vec<TopRow>),
     AgentsTopRepos(Vec<TopRow>),
-    // (Future chunks add: Realtime, GatewayStatus)
+    /// Realtime stats partial-update. The three realtime updates are split
+    /// (stats / feed / status) so each polling task only writes the slice of
+    /// the snapshot it owns — a feed refresh never clobbers cards, and a
+    /// stats refresh never clobbers feed rows.
+    RealtimeStats {
+        active_providers: i32,
+        active_sessions: i32,
+        user_turns_per_min: i64,
+        tokens_last_hour: f64,
+        cost_last_hour: f64,
+        p50_ms: Option<i32>,
+        p99_ms: Option<i32>,
+        sample_count: i32,
+    },
+    RealtimeFeed(Vec<FeedRow>),
+    GatewayStatus {
+        healthy: bool,
+        port: i32,
+    },
 }

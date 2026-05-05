@@ -6,15 +6,17 @@
 //! counts saturate to `i32::MAX`. The TUI is a display surface; capture-side
 //! data integrity belongs in the gateway, not here.
 
+use crate::app::lens_update::LensUpdate;
 use crate::app::state::SessionsQueryVars;
 use crate::app::time_window::{days_for_window, TimeWindow};
 use crate::gql::queries::{
-    agent_framework_distribution, agent_summary, daily_spend, session_detail, sessions,
-    spend_by_framework, spend_by_model, spend_by_provider, top_developers, top_repositories, turn,
-    usage_summary,
+    agent_framework_distribution, agent_summary, daily_spend, gateway_status, realtime_feed,
+    realtime_stats, session_detail, sessions, spend_by_framework, spend_by_model,
+    spend_by_provider, top_developers, top_repositories, turn, usage_summary,
 };
 use crate::lenses::agents::{AgentSummaryStats, FrameworkSlice, TopRow};
 use crate::lenses::cost::BreakdownRow;
+use crate::lenses::realtime::FeedRow;
 use crate::lenses::session_detail::{SessionDetailLens, TurnRow};
 use crate::lenses::sessions::SessionRow;
 use crate::lenses::turn_detail::TurnDetailLens;
@@ -212,6 +214,65 @@ pub fn marshal_top_repositories(resp: top_repositories::ResponseData) -> Vec<Top
             cost: r.total_cost_usd,
         })
         .collect()
+}
+
+/// Marshal a `RealtimeStats` GraphQL response into the partial-update lens
+/// variant. Splitting the realtime updates into stats / feed / status means
+/// each polling task only writes its own slice of the snapshot — see the
+/// realtime-pipeline tests for the no-clobber invariant this enables.
+pub fn marshal_realtime_stats(resp: realtime_stats::ResponseData) -> LensUpdate {
+    let s = resp.realtime_stats;
+    LensUpdate::RealtimeStats {
+        active_providers: i32::try_from(s.active_provider_count).unwrap_or(i32::MAX),
+        active_sessions: i32::try_from(s.active_sessions).unwrap_or(i32::MAX),
+        user_turns_per_min: s.user_turns_per_minute,
+        tokens_last_hour: s.tokens_last_hour,
+        cost_last_hour: s.cost_last_hour,
+        p50_ms: s
+            .latency_p50_ms
+            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
+        p99_ms: s
+            .latency_p99_ms
+            .map(|v| i32::try_from(v).unwrap_or(i32::MAX)),
+        sample_count: i32::try_from(s.latency_sample_count).unwrap_or(i32::MAX),
+    }
+}
+
+/// Marshal a `RealtimeFeed` GraphQL response into the lens row vector. The
+/// schema's FeedItem fields map directly onto FeedRow; we display
+/// `framework` in the `agent` column.
+pub fn marshal_realtime_feed(resp: realtime_feed::ResponseData) -> Vec<FeedRow> {
+    resp.realtime_feed
+        .into_iter()
+        .map(|item| FeedRow {
+            time: format_feed_time(&item.timestamp),
+            provider: item.provider,
+            model: item.model.unwrap_or_default(),
+            agent: item.framework.unwrap_or_default(),
+            tokens: item.total_tokens,
+            cost: item.cost_usd,
+            status: item
+                .http_status
+                .map(|v| i32::try_from(v).unwrap_or(0))
+                .unwrap_or(0),
+        })
+        .collect()
+}
+
+/// Marshal a `GatewayStatus` GraphQL response into (healthy, port). The
+/// schema's `GatewayStatus` does not expose a port field, so we hardcode
+/// 8443 (the gateway's published port). `healthy` parses common synonyms:
+/// "healthy", "ok" → true; everything else (including "degraded",
+/// "unhealthy", empty) → false.
+pub fn marshal_gateway_status(resp: gateway_status::ResponseData) -> (bool, i32) {
+    let s = resp.gateway_status;
+    let healthy = s.status.eq_ignore_ascii_case("healthy") || s.status.eq_ignore_ascii_case("ok");
+    let port = 8443;
+    (healthy, port)
+}
+
+fn format_feed_time(t: &chrono::DateTime<chrono::Utc>) -> String {
+    t.format("%H:%M:%S").to_string()
 }
 
 /// Build the codegen `sessions::Variables` from the TUI-shaped

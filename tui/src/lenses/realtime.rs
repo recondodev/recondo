@@ -124,6 +124,50 @@ impl RealtimeLens {
         self.selected_row = 0;
     }
 
+    /// Partial update: replace just the stats portion of the snapshot. Leaves
+    /// `rows`, `healthy`, `port` untouched so the realtime stats polling task
+    /// does not clobber data owned by the feed or gateway-status tasks.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_stats(
+        &mut self,
+        active_providers: i32,
+        active_sessions: i32,
+        user_turns_per_min: i64,
+        tokens_last_hour: f64,
+        cost_last_hour: f64,
+        p50_ms: Option<i32>,
+        p99_ms: Option<i32>,
+        sample_count: i32,
+    ) {
+        let s = &mut self.snapshot;
+        s.active_providers = active_providers;
+        s.active_sessions = active_sessions;
+        s.user_turns_per_min = user_turns_per_min;
+        s.tokens_last_hour = tokens_last_hour;
+        s.cost_last_hour = cost_last_hour;
+        s.p50_ms = p50_ms;
+        s.p99_ms = p99_ms;
+        s.sample_count = sample_count;
+    }
+
+    /// Partial update: replace just the live-feed rows. Preserves the user's
+    /// cursor where possible — only clamps `selected_row` if the new row set
+    /// is shorter than the previous selection.
+    pub fn apply_feed_rows(&mut self, rows: Vec<FeedRow>) {
+        self.snapshot.rows = rows;
+        if self.selected_row >= self.snapshot.rows.len() {
+            self.selected_row = self.snapshot.rows.len().saturating_sub(1);
+        }
+    }
+
+    /// Partial update: replace just gateway health + port. Independent of
+    /// stats and feed so the 15s status cadence can run without disturbing
+    /// the 5s stats / feed cadences.
+    pub fn apply_gateway_status(&mut self, healthy: bool, port: i32) {
+        self.snapshot.healthy = healthy;
+        self.snapshot.port = port;
+    }
+
     pub fn provider_filter(&self) -> Option<&str> {
         self.provider_filter.as_deref()
     }

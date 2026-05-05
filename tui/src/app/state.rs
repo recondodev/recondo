@@ -178,6 +178,31 @@ impl AppState {
             LensUpdate::AgentsFrameworkDist(rows) => self.agents.set_framework_distribution(rows),
             LensUpdate::AgentsTopDevs(rows) => self.agents.set_top_devs(rows),
             LensUpdate::AgentsTopRepos(rows) => self.agents.set_top_repos(rows),
+            LensUpdate::RealtimeStats {
+                active_providers,
+                active_sessions,
+                user_turns_per_min,
+                tokens_last_hour,
+                cost_last_hour,
+                p50_ms,
+                p99_ms,
+                sample_count,
+            } => {
+                self.realtime.apply_stats(
+                    active_providers,
+                    active_sessions,
+                    user_turns_per_min,
+                    tokens_last_hour,
+                    cost_last_hour,
+                    p50_ms,
+                    p99_ms,
+                    sample_count,
+                );
+            }
+            LensUpdate::RealtimeFeed(rows) => self.realtime.apply_feed_rows(rows),
+            LensUpdate::GatewayStatus { healthy, port } => {
+                self.realtime.apply_gateway_status(healthy, port)
+            }
         }
     }
 
