@@ -1,7 +1,6 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-#[expect(dead_code, reason = "scaffolding; variants consumed by subsequent TUI tasks")]
 pub enum AppError {
     #[error("cannot reach Recondo API at {url}: {source}\n(For local dev: is `just api-dev` running? For deployed installs: check the URL and your network.)")]
     ApiUnreachable {

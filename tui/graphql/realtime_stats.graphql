@@ -1,0 +1,16 @@
+query RealtimeStats {
+  realtimeStats {
+    requestsPerMinute
+    userTurnsPerMinute
+    activeSessions
+    activeProviderCount
+    tokensLastHour
+    cacheReadTokensLastHour
+    costLastHour
+    costProjectedToday
+    latencyP50Ms
+    latencyP99Ms
+    latencySampleCount
+    latencySource
+  }
+}

@@ -1,0 +1,14 @@
+query RealtimeFeed($provider: String, $limit: Int) {
+  realtimeFeed(provider: $provider, limit: $limit) {
+    timestamp
+    provider
+    model
+    framework
+    intent
+    totalTokens
+    costUsd
+    httpStatus
+    sessionId
+    userTurnId
+  }
+}

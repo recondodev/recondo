@@ -1,0 +1,7 @@
+query GatewayStatus {
+  gatewayStatus {
+    status
+    uptimeSeconds
+    lastHeartbeat
+  }
+}
