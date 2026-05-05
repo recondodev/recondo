@@ -1,0 +1,18 @@
+query Sessions($filter: SessionFilter, $limit: Int, $offset: Int) {
+  sessions(filter: $filter, limit: $limit, offset: $offset) {
+    total
+    limit
+    offset
+    items {
+      id
+      startedAt
+      endedAt
+      model
+      framework
+      provider
+      totalTurns
+      totalCostUsd
+      totalTokens
+    }
+  }
+}

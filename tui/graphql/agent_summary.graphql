@@ -1,0 +1,11 @@
+query AgentSummary($period: Period, $from: DateTime, $to: DateTime) {
+  agentSummary(period: $period, from: $from, to: $to) {
+    activeAgents
+    frameworkCount
+    totalSessions
+    sessionsDelta
+    averageTurnsPerSession
+    medianTurnsPerSession
+    uniqueDevelopers
+  }
+}

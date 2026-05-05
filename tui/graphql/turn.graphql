@@ -1,0 +1,19 @@
+query Turn($id: ID!) {
+  turn(id: $id) {
+    id
+    sessionId
+    sequenceNum
+    timestamp
+    model
+    inputTokens
+    outputTokens
+    costUsd
+    userRequestText
+    responseText
+    toolCalls {
+      name
+      input
+      result
+    }
+  }
+}

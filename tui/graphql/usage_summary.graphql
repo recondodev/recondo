@@ -1,0 +1,15 @@
+query UsageSummary($period: Period, $from: DateTime, $to: DateTime) {
+  usageSummary(period: $period, from: $from, to: $to) {
+    totalCostUsd
+    projectedMonthlyCostUsd
+    totalTokens
+    cacheReadTokens
+    cacheReadPercentage
+    averageCostPerSession
+    averageCostDelta
+    cacheHitRate
+    cacheSavingsUsd
+    costPerDeveloperPerDay
+    developerCount
+  }
+}
