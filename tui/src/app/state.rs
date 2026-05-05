@@ -1,6 +1,7 @@
 use crate::app::history::HistoryStack;
 use crate::app::keymap::{KeyAction, Mode};
 use crate::app::lens::Lens;
+use crate::app::lens_update::LensUpdate;
 use crate::app::selection::SelectionRegistry;
 use crate::app::tabs::PinnedTabs;
 use crate::app::time_window::TimeWindow;
@@ -8,10 +9,22 @@ use crate::lenses::agents::AgentsLens;
 use crate::lenses::cost::{drill_target, CostLens};
 use crate::lenses::realtime::RealtimeLens;
 use crate::lenses::session_detail::SessionDetailLens;
-use crate::lenses::sessions::SessionsLens;
+use crate::lenses::sessions::{SessionFilter, SessionsLens};
 use crate::lenses::turn_detail::TurnDetailLens;
 use crate::palette::commands::Command;
 use crate::palette::overlay::PaletteOverlay;
+
+/// Variables describing the next sessions GraphQL query the polling task should
+/// run. Composed from the lens-level filter (set by the user via the filter
+/// modal) and the current selection group (e.g., a Cost-lens drill into a
+/// provider).
+#[derive(Debug, Clone, Default)]
+pub struct SessionsQueryVars {
+    pub filter: SessionFilter,
+    pub period: TimeWindow,
+    pub limit: i64,
+    pub offset: i64,
+}
 
 pub struct AppState {
     mode: Mode,
@@ -68,6 +81,52 @@ impl AppState {
     }
     pub fn selection(&self) -> &SelectionRegistry {
         &self.selection
+    }
+    pub fn selection_mut(&mut self) -> &mut SelectionRegistry {
+        &mut self.selection
+    }
+
+    /// Compose the next Sessions GraphQL query variables from current state.
+    ///
+    /// Layering rules:
+    /// 1. Start with the explicit lens filter (e.g., set via the filter modal).
+    /// 2. Layer the selection group (e.g., a drill-down from Cost) on top —
+    ///    selection-driven dimensions only fill in when the lens hasn't
+    ///    already set the same dimension explicitly.
+    pub fn sessions_query_vars(&self) -> SessionsQueryVars {
+        let mut filter = self.sessions.filter().clone();
+
+        if let Some(group) = self.selection.group() {
+            use crate::app::selection::GroupKey;
+            match group {
+                GroupKey::Provider(p) if filter.provider.is_none() => {
+                    filter.provider = Some(p.clone());
+                }
+                GroupKey::Model(m) if filter.model.is_none() => {
+                    filter.model = Some(m.clone());
+                }
+                GroupKey::Framework(f) if filter.framework.is_none() => {
+                    filter.framework = Some(f.clone());
+                }
+                _ => {}
+            }
+        }
+
+        SessionsQueryVars {
+            filter,
+            period: self.window,
+            limit: 20,
+            offset: 0,
+        }
+    }
+
+    /// Apply an update message produced by a polling task. This is the
+    /// production entry point for polled data — direct lens setters bypass
+    /// this path and are reserved for tests / one-shot fixtures.
+    pub fn apply_update(&mut self, update: LensUpdate) {
+        match update {
+            LensUpdate::Sessions(rows) => self.sessions.set_rows(rows),
+        }
     }
     pub fn should_quit(&self) -> bool {
         self.quit

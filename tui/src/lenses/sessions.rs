@@ -122,6 +122,10 @@ impl SessionsLens {
         &self.filter
     }
 
+    pub fn rows(&self) -> &[SessionRow] {
+        &self.rows
+    }
+
     pub fn selected(&self) -> usize {
         self.selected
     }
@@ -174,13 +178,21 @@ impl SessionsLens {
             .filter(|r| self.filter.model.as_deref().is_none_or(|m| r.model == m))
             .collect();
         v.sort_by(|a, b| {
+            // Default direction puts the most natural value first for each key:
+            //   Recency  → newest started_at first (desc by string)
+            //   Cost     → highest cost first (desc)
+            //   Turns    → most turns first (desc)
+            //   Model    → ascending alphabetical
+            //   Framework → ascending alphabetical
+            // The `descending` flag (named for the legacy "Shift+O reverses"
+            // toggle) flips this default direction.
             let ord = match self.sort {
-                SortKey::Recency => a.started_at.cmp(&b.started_at),
-                SortKey::Cost => a
+                SortKey::Recency => b.started_at.cmp(&a.started_at),
+                SortKey::Cost => b
                     .cost
-                    .partial_cmp(&b.cost)
+                    .partial_cmp(&a.cost)
                     .unwrap_or(std::cmp::Ordering::Equal),
-                SortKey::Turns => a.turns.cmp(&b.turns),
+                SortKey::Turns => b.turns.cmp(&a.turns),
                 SortKey::Model => a.model.cmp(&b.model),
                 SortKey::Framework => a.framework.cmp(&b.framework),
             };

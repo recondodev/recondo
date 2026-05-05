@@ -2,6 +2,8 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time::interval;
 
+pub mod sessions;
+
 #[derive(Debug, Clone, Copy)]
 pub struct PollIntervals {
     pub stats_secs: u64,
