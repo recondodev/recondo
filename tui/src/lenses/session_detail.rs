@@ -1,4 +1,5 @@
 use crate::format::format_cost;
+use crate::search::fuzzy::fuzzy_match;
 use crate::ui::widgets::table::VirtTable;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -22,6 +23,7 @@ pub struct SessionDetailLens {
     session_id: String,
     turns: Vec<TurnRow>,
     selected: usize,
+    search_filter: Option<String>,
 }
 
 impl SessionDetailLens {
@@ -34,7 +36,39 @@ impl SessionDetailLens {
             session_id,
             turns,
             selected,
+            search_filter: None,
         }
+    }
+
+    /// Sets the fuzzy search filter applied to turn rows. An empty /
+    /// whitespace-only needle clears the filter.
+    pub fn set_search_filter(&mut self, needle: Option<String>) {
+        self.search_filter = needle.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+    }
+
+    pub fn search_filter(&self) -> Option<&str> {
+        self.search_filter.as_deref()
+    }
+
+    /// Turns visible after applying the fuzzy search filter (id + model).
+    pub fn visible_turns(&self) -> Vec<&TurnRow> {
+        self.turns
+            .iter()
+            .filter(|t| match self.search_filter.as_deref() {
+                None => true,
+                Some(needle) => {
+                    let label = format!("{} {}", t.id, t.model);
+                    fuzzy_match(needle, &label).is_some()
+                }
+            })
+            .collect()
     }
 
     pub fn selected(&self) -> usize {

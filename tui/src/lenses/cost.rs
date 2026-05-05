@@ -1,5 +1,6 @@
 use crate::app::selection::{GroupKey, SelectionRegistry};
 use crate::format::format_cost;
+use crate::search::fuzzy::fuzzy_match;
 use crate::ui::widgets::sparkline::DailySpark;
 use crate::ui::widgets::table::VirtTable;
 use ratatui::{
@@ -38,6 +39,7 @@ pub struct CostLens {
     daily: Vec<f64>,
     selected: usize,
     focused: CostPane,
+    search_filter: Option<String>,
 }
 
 impl Default for CostLens {
@@ -56,7 +58,36 @@ impl CostLens {
             daily: vec![],
             selected: 0,
             focused: CostPane::Breakdown,
+            search_filter: None,
         }
+    }
+
+    /// Sets the fuzzy search filter applied to the breakdown rows.
+    /// An empty / whitespace-only needle clears the filter.
+    pub fn set_search_filter(&mut self, needle: Option<String>) {
+        self.search_filter = needle.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+    }
+
+    pub fn search_filter(&self) -> Option<&str> {
+        self.search_filter.as_deref()
+    }
+
+    /// Returns the breakdown rows visible after applying `search_filter`.
+    pub fn visible_breakdown(&self) -> Vec<&BreakdownRow> {
+        self.breakdown
+            .iter()
+            .filter(|r| match self.search_filter.as_deref() {
+                None => true,
+                Some(needle) => fuzzy_match(needle, &r.label).is_some(),
+            })
+            .collect()
     }
 
     pub fn focused_pane(&self) -> CostPane {
@@ -174,7 +205,7 @@ impl CostLens {
         );
 
         let display: Vec<Vec<String>> = self
-            .breakdown
+            .visible_breakdown()
             .iter()
             .map(|r| vec![r.label.clone(), format_cost(r.cost), r.sessions.to_string()])
             .collect();

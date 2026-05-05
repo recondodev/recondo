@@ -1,4 +1,5 @@
 use crate::format::{format_compact_count, format_cost};
+use crate::search::fuzzy::fuzzy_match;
 use crate::ui::widgets::{metric_card::MetricCard, status_pill::StatusPill, table::VirtTable};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -56,6 +57,7 @@ pub struct RealtimeLens {
     pub provider_filter: Option<String>,
     pub selected_row: usize,
     focused: RealtimePane,
+    search_filter: Option<String>,
 }
 
 impl Default for RealtimeLens {
@@ -87,7 +89,25 @@ impl RealtimeLens {
             provider_filter: None,
             selected_row: 0,
             focused: RealtimePane::Cards,
+            search_filter: None,
         }
+    }
+
+    /// Sets the fuzzy search filter applied on top of the provider filter.
+    /// An empty / whitespace-only needle clears the filter.
+    pub fn set_search_filter(&mut self, needle: Option<String>) {
+        self.search_filter = needle.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+    }
+
+    pub fn search_filter(&self) -> Option<&str> {
+        self.search_filter.as_deref()
     }
 
     pub fn snapshot(&self) -> &RealtimeSnapshot {
@@ -119,7 +139,8 @@ impl RealtimeLens {
         };
     }
 
-    /// Returns the rows visible after applying `provider_filter`.
+    /// Returns the rows visible after applying `provider_filter` and
+    /// the fuzzy search filter.
     pub fn visible_rows(&self) -> Vec<&FeedRow> {
         self.snapshot
             .rows
@@ -128,6 +149,13 @@ impl RealtimeLens {
                 self.provider_filter
                     .as_deref()
                     .is_none_or(|p| r.provider == p)
+            })
+            .filter(|r| match self.search_filter.as_deref() {
+                None => true,
+                Some(needle) => {
+                    let label = format!("{} {} {}", r.provider, r.model, r.agent);
+                    fuzzy_match(needle, &label).is_some()
+                }
             })
             .collect()
     }

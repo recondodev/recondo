@@ -369,13 +369,38 @@ impl AppState {
             (Mode::Search, Backspace) => {
                 self.search_buf.pop();
             }
-            (Mode::Search, Submit) => self.mode = Mode::Normal,
+            (Mode::Search, Submit) => {
+                let needle = std::mem::take(&mut self.search_buf);
+                let trimmed = needle.trim().to_string();
+                let filter = if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                };
+                self.apply_search_to_active_lens(filter);
+                self.mode = Mode::Normal;
+            }
 
             _ => {}
         }
     }
 
     // ---- Lens-aware dispatch helpers --------------------------------------
+
+    fn apply_search_to_active_lens(&mut self, filter: Option<String>) {
+        match self.history.current() {
+            Lens::Sessions => self.sessions.set_search_filter(filter),
+            Lens::Cost => self.cost.set_search_filter(filter),
+            Lens::Agents => self.agents.set_search_filter(filter),
+            Lens::Realtime => self.realtime.set_search_filter(filter),
+            Lens::SessionDetail => {
+                if let Some(sd) = self.session_detail.as_mut() {
+                    sd.set_search_filter(filter);
+                }
+            }
+            _ => {} // Help, Stub, TurnDetail: no list to filter
+        }
+    }
 
     fn dispatch_move_down(&mut self) {
         match self.history.current() {

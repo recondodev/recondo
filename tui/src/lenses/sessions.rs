@@ -1,4 +1,5 @@
 use crate::format::format_cost;
+use crate::search::fuzzy::fuzzy_match;
 use crate::ui::widgets::{modal::Modal, table::VirtTable};
 use ratatui::{
     layout::{Constraint, Rect},
@@ -50,6 +51,7 @@ pub struct SessionsLens {
     selected: usize,
     filter: SessionFilter,
     filter_open: bool,
+    search_filter: Option<String>,
 }
 
 impl Default for SessionsLens {
@@ -74,6 +76,7 @@ impl SessionsLens {
             selected: 0,
             filter: SessionFilter::default(),
             filter_open: false,
+            search_filter: None,
         }
     }
 
@@ -126,6 +129,23 @@ impl SessionsLens {
 
     pub fn filter(&self) -> &SessionFilter {
         &self.filter
+    }
+
+    /// Sets the fuzzy search filter applied on top of the structured filter.
+    /// An empty / whitespace-only needle clears the filter.
+    pub fn set_search_filter(&mut self, needle: Option<String>) {
+        self.search_filter = needle.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+    }
+
+    pub fn search_filter(&self) -> Option<&str> {
+        self.search_filter.as_deref()
     }
 
     pub fn rows(&self) -> &[SessionRow] {
@@ -182,6 +202,13 @@ impl SessionsLens {
                     .is_none_or(|f| r.framework == f)
             })
             .filter(|r| self.filter.model.as_deref().is_none_or(|m| r.model == m))
+            .filter(|r| match self.search_filter.as_deref() {
+                None => true,
+                Some(needle) => {
+                    let label = format!("{} {} {}", r.model, r.framework, r.id);
+                    fuzzy_match(needle, &label).is_some()
+                }
+            })
             .collect();
         v.sort_by(|a, b| {
             // Comparator returns ascending order for every key; the

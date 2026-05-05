@@ -1,4 +1,5 @@
 use crate::format::format_cost;
+use crate::search::fuzzy::fuzzy_match;
 use crate::ui::widgets::bar_chart::HBarChart;
 use crate::ui::widgets::metric_card::MetricCard;
 use crate::ui::widgets::table::VirtTable;
@@ -44,6 +45,7 @@ pub struct AgentsLens {
     focused: AgentsPane,
     selected_dev: usize,
     selected_repo: usize,
+    search_filter: Option<String>,
 }
 
 impl Default for AgentsLens {
@@ -62,7 +64,44 @@ impl AgentsLens {
             focused: AgentsPane::Cards,
             selected_dev: 0,
             selected_repo: 0,
+            search_filter: None,
         }
+    }
+
+    /// Sets the fuzzy search filter applied to top devs / top repos.
+    /// An empty / whitespace-only needle clears the filter.
+    pub fn set_search_filter(&mut self, needle: Option<String>) {
+        self.search_filter = needle.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+    }
+
+    pub fn search_filter(&self) -> Option<&str> {
+        self.search_filter.as_deref()
+    }
+
+    fn filter_rows<'a>(&self, rows: &'a [TopRow]) -> Vec<&'a TopRow> {
+        rows.iter()
+            .filter(|r| match self.search_filter.as_deref() {
+                None => true,
+                Some(needle) => fuzzy_match(needle, &r.label).is_some(),
+            })
+            .collect()
+    }
+
+    /// Top developers visible after applying the fuzzy search filter.
+    pub fn visible_top_devs(&self) -> Vec<&TopRow> {
+        self.filter_rows(&self.top_devs)
+    }
+
+    /// Top repositories visible after applying the fuzzy search filter.
+    pub fn visible_top_repos(&self) -> Vec<&TopRow> {
+        self.filter_rows(&self.top_repos)
     }
 
     pub fn focused_pane(&self) -> AgentsPane {
@@ -208,7 +247,7 @@ impl AgentsLens {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(rows[2]);
         let dev_rows: Vec<Vec<String>> = self
-            .top_devs
+            .visible_top_devs()
             .iter()
             .map(|r| vec![r.label.clone(), r.sessions.to_string(), format_cost(r.cost)])
             .collect();
@@ -227,7 +266,7 @@ impl AgentsLens {
             halves[0],
         );
         let repo_rows: Vec<Vec<String>> = self
-            .top_repos
+            .visible_top_repos()
             .iter()
             .map(|r| vec![r.label.clone(), r.sessions.to_string(), format_cost(r.cost)])
             .collect();
