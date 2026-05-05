@@ -4,6 +4,7 @@ use ratatui::{
     Frame,
 };
 
+#[derive(Debug, Clone)]
 pub struct TurnDetailLens {
     pub id: String,
     pub model: String,

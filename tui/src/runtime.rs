@@ -11,9 +11,14 @@ use recondo_tui::app::state::{AppState, SessionsQueryVars};
 use recondo_tui::config::Config;
 use recondo_tui::error::Result;
 use recondo_tui::gql::marshal::build_sessions_variables;
-use recondo_tui::gql::queries::{sessions as q_sessions, Sessions};
+use recondo_tui::gql::queries::{
+    session_detail as q_session_detail, sessions as q_sessions, turn as q_turn, SessionDetail,
+    Sessions, Turn,
+};
 use recondo_tui::lenses::realtime::RealtimeSnapshot;
+use recondo_tui::poll::session_detail::poll_session_detail_once;
 use recondo_tui::poll::sessions::poll_sessions_once;
+use recondo_tui::poll::turn_detail::poll_turn_detail_once;
 use recondo_tui::poll::{spawn_loop, PollIntervals};
 use recondo_tui::ui::draw::draw_app;
 use std::io::stdout;
@@ -95,6 +100,78 @@ pub async fn run(cfg: Config) -> Result<()> {
         })
     };
 
+    // SessionDetail polling. Triggered by drill (selection.set_session +
+    // history.push(SessionDetail)). The watch channel carries the active
+    // fetch id; the polling task re-fetches whenever that id changes (and
+    // periodically while the user stays on the lens, so updated turns appear).
+    let (sd_id_tx, sd_id_rx) = watch::channel::<Option<String>>(None);
+    let _session_detail_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        let mut sd_id_rx = sd_id_rx;
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(10));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = sd_id_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let id = sd_id_rx.borrow().clone();
+                let Some(id) = id else { continue };
+                // Re-fetch on id change OR on cadence. Either way produce a
+                // fresh poll; this keeps the lens current as new turns land.
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_session_detail_once(id, |id| async move {
+                    fetch_session_detail(&url, &api_key, id).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    // TurnDetail polling. Same pattern as SessionDetail, keyed on selection.turn.
+    let (td_id_tx, td_id_rx) = watch::channel::<Option<String>>(None);
+    let _turn_detail_task =
+        {
+            let url = url.clone();
+            let api_key = api_key.clone();
+            let update_tx = update_tx.clone();
+            let mut td_id_rx = td_id_rx;
+            tokio::spawn(async move {
+                let mut tk = tokio::time::interval(Duration::from_secs(10));
+                loop {
+                    tokio::select! {
+                        _ = tk.tick() => {}
+                        res = td_id_rx.changed() => {
+                            if res.is_err() { break; }
+                        }
+                    }
+                    let id = td_id_rx.borrow().clone();
+                    let Some(id) = id else { continue };
+                    let url = url.clone();
+                    let api_key = api_key.clone();
+                    let result = poll_turn_detail_once(id, |id| async move {
+                        fetch_turn(&url, &api_key, id).await
+                    })
+                    .await;
+                    if let Some(update) = result {
+                        if update_tx.send(update).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            })
+        };
+
     while !state.should_quit() {
         while let Ok(snap) = rx.try_recv() {
             state.realtime_mut().set_snapshot(snap);
@@ -113,6 +190,13 @@ pub async fn run(cfg: Config) -> Result<()> {
                 // Push the latest query vars so the polling task picks up
                 // any state change (filter modal apply, window switch, drill).
                 let _ = vars_tx.send(state.sessions_query_vars());
+                // SessionDetail / TurnDetail polling is selection-driven:
+                // each task only fetches when its fetch_id() yields Some(id).
+                // Pushing on every event is cheap (watch coalesces identical
+                // values) and keeps the polling tasks woken up the moment a
+                // drill happens.
+                let _ = sd_id_tx.send(state.session_detail_fetch_id());
+                let _ = td_id_tx.send(state.turn_detail_fetch_id());
             }
         }
     }
@@ -167,4 +251,26 @@ async fn fetch_sessions(
     let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
     let q_vars = build_sessions_variables(vars);
     client.query::<Sessions>(q_vars).await
+}
+
+/// One-shot SessionDetail GraphQL fetch.
+async fn fetch_session_detail(
+    url: &str,
+    api_key: &Option<String>,
+    id: String,
+) -> std::result::Result<q_session_detail::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_session_detail::Variables { id };
+    client.query::<SessionDetail>(q_vars).await
+}
+
+/// One-shot Turn GraphQL fetch.
+async fn fetch_turn(
+    url: &str,
+    api_key: &Option<String>,
+    id: String,
+) -> std::result::Result<q_turn::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_turn::Variables { id };
+    client.query::<Turn>(q_vars).await
 }

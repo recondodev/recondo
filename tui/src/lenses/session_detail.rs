@@ -17,6 +17,7 @@ pub struct TurnRow {
     pub tool_calls: i32,
 }
 
+#[derive(Debug, Clone)]
 pub struct SessionDetailLens {
     session_id: String,
     turns: Vec<TurnRow>,

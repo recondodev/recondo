@@ -126,7 +126,27 @@ impl AppState {
     pub fn apply_update(&mut self, update: LensUpdate) {
         match update {
             LensUpdate::Sessions(rows) => self.sessions.set_rows(rows),
+            LensUpdate::SessionDetail(sd) => self.session_detail = Some(sd),
+            LensUpdate::TurnDetail(td) => self.turn_detail = Some(td),
         }
+    }
+
+    /// Returns the session id to fetch when SessionDetail is the active lens.
+    /// `None` when not on SessionDetail or no session has been selected.
+    pub fn session_detail_fetch_id(&self) -> Option<String> {
+        if !matches!(self.history.current(), Lens::SessionDetail) {
+            return None;
+        }
+        self.selection.session().map(String::from)
+    }
+
+    /// Returns the turn id to fetch when TurnDetail is the active lens.
+    /// `None` when not on TurnDetail or no turn has been selected.
+    pub fn turn_detail_fetch_id(&self) -> Option<String> {
+        if !matches!(self.history.current(), Lens::TurnDetail) {
+            return None;
+        }
+        self.selection.turn().map(String::from)
     }
     pub fn should_quit(&self) -> bool {
         self.quit

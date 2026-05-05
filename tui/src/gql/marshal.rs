@@ -8,8 +8,10 @@
 
 use crate::app::state::SessionsQueryVars;
 use crate::app::time_window::{days_for_window, TimeWindow};
-use crate::gql::queries::sessions;
+use crate::gql::queries::{session_detail, sessions, turn};
+use crate::lenses::session_detail::{SessionDetailLens, TurnRow};
 use crate::lenses::sessions::SessionRow;
+use crate::lenses::turn_detail::TurnDetailLens;
 
 pub fn marshal_sessions(resp: sessions::ResponseData) -> Vec<SessionRow> {
     resp.sessions
@@ -39,6 +41,43 @@ pub fn window_to_started_after(w: TimeWindow) -> Option<chrono::DateTime<chrono:
         TimeWindow::All => None,
         _ => Some(chrono::Utc::now() - chrono::Duration::days(days_for_window(w) as i64)),
     }
+}
+
+/// Marshal a `SessionDetail` GraphQL response into a `SessionDetailLens`.
+/// Returns `None` when the API reports no session for the requested id.
+pub fn marshal_session_detail(resp: session_detail::ResponseData) -> Option<SessionDetailLens> {
+    let session = resp.session?;
+    let turns: Vec<TurnRow> = session
+        .turns
+        .into_iter()
+        .map(|t| TurnRow {
+            id: t.id,
+            sequence: t.sequence_num,
+            model: t.model.unwrap_or_default(),
+            prompt_tokens: t.input_tokens,
+            completion_tokens: t.output_tokens,
+            cost: t.cost_usd,
+            tool_calls: i32::try_from(t.tool_call_count).unwrap_or(i32::MAX),
+        })
+        .collect();
+    Some(SessionDetailLens::new(session.id, turns, None))
+}
+
+/// Marshal a `Turn` GraphQL response into a `TurnDetailLens`.
+/// Returns `None` when the API reports no turn for the requested id.
+pub fn marshal_turn_detail(resp: turn::ResponseData) -> Option<TurnDetailLens> {
+    let t = resp.turn?;
+    Some(TurnDetailLens {
+        id: t.id,
+        model: t.model.unwrap_or_default(),
+        prompt: t.user_request_text.unwrap_or_default(),
+        response: t.response_text.unwrap_or_default(),
+        tool_calls: t
+            .tool_calls
+            .into_iter()
+            .map(|tc| format!("- {}: {}", tc.name, tc.input.unwrap_or_default()))
+            .collect(),
+    })
 }
 
 /// Build the codegen `sessions::Variables` from the TUI-shaped
