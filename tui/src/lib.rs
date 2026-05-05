@@ -4,5 +4,7 @@ pub mod error;
 pub mod format;
 pub mod gql;
 pub mod lenses;
+pub mod palette;
 pub mod poll;
+pub mod search;
 pub mod ui;
