@@ -24,7 +24,7 @@ H/L Browser-style back/forward
 o/O Sort cycle (forward/reverse)
 f   Filter (cycle or modal, lens-specific)
 g   Group-by cycle (Cost lens only)
-Tab Cycle focus between panels";
+Tab Cycle focus across panels";
         f.render_widget(
             Paragraph::new(body).block(Block::default().borders(Borders::ALL).title("Help")),
             area,

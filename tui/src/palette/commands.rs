@@ -9,8 +9,6 @@ pub enum Command {
     WindowWeek,
     WindowMonth,
     WindowAll,
-    WindowSince(String),
-    WindowBetween(String, String),
     Pin,
     Quit,
 }

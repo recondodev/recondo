@@ -19,17 +19,14 @@ fn parses_time_window_commands() {
 }
 
 #[test]
-fn parses_since_and_between() {
-    assert_eq!(
-        parse_command("since 2026-04-01"),
-        Ok(Command::WindowSince("2026-04-01".into()))
+fn since_and_between_are_unimplemented_in_v1() {
+    assert!(
+        parse_command("since 2026-04-01").is_err(),
+        "since is excised in v1; implement properly before re-adding"
     );
-    assert_eq!(
-        parse_command("between 2026-04-01 2026-04-15"),
-        Ok(Command::WindowBetween(
-            "2026-04-01".into(),
-            "2026-04-15".into()
-        ))
+    assert!(
+        parse_command("between 2026-04-01 2026-04-15").is_err(),
+        "between is excised in v1; implement properly before re-adding"
     );
 }
 

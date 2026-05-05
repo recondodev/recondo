@@ -542,10 +542,6 @@ impl AppState {
             Command::WindowWeek => self.window = TimeWindow::Week,
             Command::WindowMonth => self.window = TimeWindow::Month,
             Command::WindowAll => self.window = TimeWindow::All,
-            Command::WindowSince(_) | Command::WindowBetween(_, _) => {
-                // v1: parsed but stored as TimeWindow::All; ad-hoc windows in v1.5+.
-                self.window = TimeWindow::All;
-            }
             Command::Pin => {
                 self.tabs.pin(self.history.current());
             }
