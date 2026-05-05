@@ -1,5 +1,6 @@
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 use recondo_tui::lenses::realtime::{FeedRow, RealtimeLens, RealtimeSnapshot};
+use recondo_tui::poll::PollIntervals;
 use recondo_tui::ui::widgets::metric_card::MetricCard;
 
 // ---------- Task 8 ----------
@@ -97,4 +98,14 @@ fn realtime_lens_renders_feed_rows_and_filter_cycle() {
     assert!(dump.contains("12:00"));
     assert!(dump.contains("claude-3-5-sonnet"));
     assert!(dump.contains("filter: openai"));
+}
+
+// ---------- Task 11 ----------
+
+#[test]
+fn poll_intervals_match_dashboard_cadence() {
+    let p = PollIntervals::default();
+    assert_eq!(p.stats_secs, 5);
+    assert_eq!(p.feed_secs, 5);
+    assert_eq!(p.status_secs, 15);
 }
