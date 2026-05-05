@@ -2,6 +2,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time::interval;
 
+pub mod agents;
 pub mod cost;
 pub mod session_detail;
 pub mod sessions;

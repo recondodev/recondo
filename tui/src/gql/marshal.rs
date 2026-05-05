@@ -9,9 +9,11 @@
 use crate::app::state::SessionsQueryVars;
 use crate::app::time_window::{days_for_window, TimeWindow};
 use crate::gql::queries::{
-    daily_spend, session_detail, sessions, spend_by_framework, spend_by_model, spend_by_provider,
-    turn, usage_summary,
+    agent_framework_distribution, agent_summary, daily_spend, session_detail, sessions,
+    spend_by_framework, spend_by_model, spend_by_provider, top_developers, top_repositories, turn,
+    usage_summary,
 };
+use crate::lenses::agents::{AgentSummaryStats, FrameworkSlice, TopRow};
 use crate::lenses::cost::BreakdownRow;
 use crate::lenses::session_detail::{SessionDetailLens, TurnRow};
 use crate::lenses::sessions::SessionRow;
@@ -140,6 +142,76 @@ pub fn marshal_daily_spend(resp: daily_spend::ResponseData) -> Vec<f64> {
 pub fn marshal_usage_summary(resp: usage_summary::ResponseData) -> (f64, Option<f64>) {
     let s = resp.usage_summary;
     (s.total_cost_usd, Some(s.average_cost_delta))
+}
+
+/// Marshal an `AgentSummary` GraphQL response into the lens stats shape.
+/// Schema's `AgentSummary` and the lens's `AgentSummaryStats` diverge:
+/// the schema exposes `activeAgents`, `frameworkCount`, `totalSessions` (Int!)
+/// but no aggregate spend field. `total_cost` therefore comes from a
+/// separate v1.5 cross-query (likely `usageSummary.totalCostUsd`); we leave
+/// it at 0.0 here so the lens renders a stable zero rather than NaN.
+pub fn marshal_agent_summary(resp: agent_summary::ResponseData) -> AgentSummaryStats {
+    let s = resp.agent_summary;
+    AgentSummaryStats {
+        total_agents: i32::try_from(s.active_agents).unwrap_or(i32::MAX),
+        total_sessions: i32::try_from(s.total_sessions).unwrap_or(i32::MAX),
+        active_frameworks: i32::try_from(s.framework_count).unwrap_or(i32::MAX),
+        // v1: schema does not expose an aggregate cost on AgentSummary.
+        // Populated by a v1.5 cross-query joining usage_summary on the
+        // same period filter. Until then, 0.0 keeps the metric card stable.
+        total_cost: 0.0,
+    }
+}
+
+/// Marshal an `AgentFrameworkDistribution` response into per-framework
+/// cost slices. The schema reuses `SpendByCategory` (same shape as cost
+/// breakdown), so we project `name` -> `label` and `costUsd` -> `cost`.
+pub fn marshal_agent_framework_distribution(
+    resp: agent_framework_distribution::ResponseData,
+) -> Vec<FrameworkSlice> {
+    resp.agent_framework_distribution
+        .into_iter()
+        .map(|c| FrameworkSlice {
+            label: c.name,
+            cost: c.cost_usd,
+        })
+        .collect()
+}
+
+/// Marshal a `TopDevelopers` response into the lens table row shape. The
+/// schema uses `accountUuid` as the stable identifier; we display it as
+/// the row label. When the uuid is empty we fall back to the favorite
+/// model so the row still renders something readable.
+pub fn marshal_top_developers(resp: top_developers::ResponseData) -> Vec<TopRow> {
+    resp.top_developers
+        .items
+        .into_iter()
+        .map(|d| {
+            let label = if d.account_uuid.is_empty() {
+                d.favorite_model.unwrap_or_default()
+            } else {
+                d.account_uuid
+            };
+            TopRow {
+                label,
+                sessions: i32::try_from(d.session_count).unwrap_or(i32::MAX),
+                cost: d.total_cost_usd,
+            }
+        })
+        .collect()
+}
+
+/// Marshal a `TopRepositories` response into the lens table row shape.
+pub fn marshal_top_repositories(resp: top_repositories::ResponseData) -> Vec<TopRow> {
+    resp.top_repositories
+        .items
+        .into_iter()
+        .map(|r| TopRow {
+            label: r.repository,
+            sessions: i32::try_from(r.session_count).unwrap_or(i32::MAX),
+            cost: r.total_cost_usd,
+        })
+        .collect()
 }
 
 /// Build the codegen `sessions::Variables` from the TUI-shaped

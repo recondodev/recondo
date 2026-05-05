@@ -8,20 +8,29 @@ use ratatui::Terminal;
 use recondo_tui::app::keymap::{dispatch_key, KeyAction};
 use recondo_tui::app::lens_update::LensUpdate;
 use recondo_tui::app::state::{
-    AppState, CostBreakdownQueryVars, CostDailyQueryVars, CostTotalQueryVars, SessionsQueryVars,
+    AgentsQueryVars, AppState, CostBreakdownQueryVars, CostDailyQueryVars, CostTotalQueryVars,
+    SessionsQueryVars,
 };
 use recondo_tui::config::Config;
 use recondo_tui::error::Result;
 use recondo_tui::gql::marshal::build_sessions_variables;
 use recondo_tui::gql::queries::{
-    daily_spend as q_daily_spend, session_detail as q_session_detail, sessions as q_sessions,
+    agent_framework_distribution as q_agent_framework_distribution,
+    agent_summary as q_agent_summary, daily_spend as q_daily_spend,
+    session_detail as q_session_detail, sessions as q_sessions,
     spend_by_framework as q_spend_by_framework, spend_by_model as q_spend_by_model,
-    spend_by_provider as q_spend_by_provider, turn as q_turn, usage_summary as q_usage_summary,
-    DailySpend, SessionDetail, Sessions, SpendByFramework, SpendByModel, SpendByProvider, Turn,
+    spend_by_provider as q_spend_by_provider, top_developers as q_top_developers,
+    top_repositories as q_top_repositories, turn as q_turn, usage_summary as q_usage_summary,
+    AgentFrameworkDistribution, AgentSummary, DailySpend, SessionDetail, Sessions,
+    SpendByFramework, SpendByModel, SpendByProvider, TopDevelopers, TopRepositories, Turn,
     UsageSummary,
 };
 use recondo_tui::lenses::cost::GroupBy;
 use recondo_tui::lenses::realtime::RealtimeSnapshot;
+use recondo_tui::poll::agents::{
+    poll_agent_framework_distribution_once, poll_agent_summary_once, poll_top_developers_once,
+    poll_top_repositories_once,
+};
 use recondo_tui::poll::cost::{
     poll_cost_breakdown_framework_once, poll_cost_breakdown_model_once, poll_cost_breakdown_once,
     poll_cost_daily_once, poll_cost_total_once,
@@ -304,6 +313,141 @@ pub async fn run(cfg: Config) -> Result<()> {
         })
     };
 
+    // Agents polling. Same pattern as Cost: an Option<vars> watch channel
+    // gates each task on `state.agents_query_vars()` returning Some — None
+    // means the user is not on the Agents lens, so the tick is skipped.
+    let (agents_summary_vars_tx, mut agents_summary_vars_rx) =
+        watch::channel::<Option<AgentsQueryVars>>(state.agents_query_vars());
+    let _agents_summary_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = agents_summary_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *agents_summary_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_agent_summary_once(vars, |v| async move {
+                    fetch_agent_summary(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    let (agents_framework_vars_tx, mut agents_framework_vars_rx) =
+        watch::channel::<Option<AgentsQueryVars>>(state.agents_query_vars());
+    let _agents_framework_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = agents_framework_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *agents_framework_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_agent_framework_distribution_once(vars, |v| async move {
+                    fetch_agent_framework_distribution(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    let (agents_top_devs_vars_tx, mut agents_top_devs_vars_rx) =
+        watch::channel::<Option<AgentsQueryVars>>(state.agents_query_vars());
+    let _agents_top_devs_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = agents_top_devs_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *agents_top_devs_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_top_developers_once(vars, |v| async move {
+                    fetch_top_developers(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
+    let (agents_top_repos_vars_tx, mut agents_top_repos_vars_rx) =
+        watch::channel::<Option<AgentsQueryVars>>(state.agents_query_vars());
+    let _agents_top_repos_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = agents_top_repos_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = *agents_top_repos_vars_rx.borrow() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_top_repositories_once(vars, |v| async move {
+                    fetch_top_repositories(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+
     while !state.should_quit() {
         while let Ok(snap) = rx.try_recv() {
             state.realtime_mut().set_snapshot(snap);
@@ -334,6 +478,11 @@ pub async fn run(cfg: Config) -> Result<()> {
                 let _ = cost_breakdown_vars_tx.send(state.cost_breakdown_query_vars());
                 let _ = cost_total_vars_tx.send(state.cost_total_query_vars());
                 let _ = cost_daily_vars_tx.send(state.cost_daily_query_vars());
+                // Agents vars — Option<...> with None when not on Agents lens.
+                let _ = agents_summary_vars_tx.send(state.agents_query_vars());
+                let _ = agents_framework_vars_tx.send(state.agents_query_vars());
+                let _ = agents_top_devs_vars_tx.send(state.agents_query_vars());
+                let _ = agents_top_repos_vars_tx.send(state.agents_query_vars());
             }
         }
     }
@@ -530,4 +679,115 @@ async fn fetch_daily_spend(
         days: Some(vars.days as i64),
     };
     client.query::<DailySpend>(q_vars).await
+}
+
+// ---- Agents fetchers --------------------------------------------------------
+//
+// Each agents-lens query module (agent_summary, agent_framework_distribution,
+// top_developers, top_repositories) emits its own copy of the GraphQL `Period`
+// enum, so the TimeWindow -> Period mapping is repeated locally per query.
+
+fn period_for_agent_summary(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_agent_summary::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_agent_summary::Period::DAY_1,
+        TimeWindow::Week => q_agent_summary::Period::DAY_7,
+        TimeWindow::Month => q_agent_summary::Period::DAY_30,
+        TimeWindow::All => q_agent_summary::Period::DAY_90,
+    }
+}
+
+fn period_for_agent_framework_distribution(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_agent_framework_distribution::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_agent_framework_distribution::Period::DAY_1,
+        TimeWindow::Week => q_agent_framework_distribution::Period::DAY_7,
+        TimeWindow::Month => q_agent_framework_distribution::Period::DAY_30,
+        TimeWindow::All => q_agent_framework_distribution::Period::DAY_90,
+    }
+}
+
+fn period_for_top_developers(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_top_developers::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_top_developers::Period::DAY_1,
+        TimeWindow::Week => q_top_developers::Period::DAY_7,
+        TimeWindow::Month => q_top_developers::Period::DAY_30,
+        TimeWindow::All => q_top_developers::Period::DAY_90,
+    }
+}
+
+fn period_for_top_repositories(
+    w: recondo_tui::app::time_window::TimeWindow,
+) -> q_top_repositories::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_top_repositories::Period::DAY_1,
+        TimeWindow::Week => q_top_repositories::Period::DAY_7,
+        TimeWindow::Month => q_top_repositories::Period::DAY_30,
+        TimeWindow::All => q_top_repositories::Period::DAY_90,
+    }
+}
+
+async fn fetch_agent_summary(
+    url: &str,
+    api_key: &Option<String>,
+    vars: AgentsQueryVars,
+) -> std::result::Result<q_agent_summary::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_agent_summary::Variables {
+        period: Some(period_for_agent_summary(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<AgentSummary>(q_vars).await
+}
+
+async fn fetch_agent_framework_distribution(
+    url: &str,
+    api_key: &Option<String>,
+    vars: AgentsQueryVars,
+) -> std::result::Result<q_agent_framework_distribution::ResponseData, recondo_tui::error::AppError>
+{
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_agent_framework_distribution::Variables {
+        period: Some(period_for_agent_framework_distribution(vars.period)),
+        from: None,
+        to: None,
+    };
+    client.query::<AgentFrameworkDistribution>(q_vars).await
+}
+
+async fn fetch_top_developers(
+    url: &str,
+    api_key: &Option<String>,
+    vars: AgentsQueryVars,
+) -> std::result::Result<q_top_developers::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_top_developers::Variables {
+        limit: Some(20),
+        offset: Some(0),
+        period: Some(period_for_top_developers(vars.period)),
+    };
+    client.query::<TopDevelopers>(q_vars).await
+}
+
+async fn fetch_top_repositories(
+    url: &str,
+    api_key: &Option<String>,
+    vars: AgentsQueryVars,
+) -> std::result::Result<q_top_repositories::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_top_repositories::Variables {
+        limit: Some(20),
+        offset: Some(0),
+        period: Some(period_for_top_repositories(vars.period)),
+    };
+    client.query::<TopRepositories>(q_vars).await
 }

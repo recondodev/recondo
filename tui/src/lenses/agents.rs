@@ -118,6 +118,18 @@ impl AgentsLens {
             _ => {}
         }
     }
+    pub fn summary(&self) -> &AgentSummaryStats {
+        &self.summary
+    }
+    pub fn framework(&self) -> &[FrameworkSlice] {
+        &self.framework
+    }
+    pub fn top_devs(&self) -> &[TopRow] {
+        &self.top_devs
+    }
+    pub fn top_repos(&self) -> &[TopRow] {
+        &self.top_repos
+    }
     pub fn set_summary(&mut self, s: AgentSummaryStats) {
         self.summary = s;
     }

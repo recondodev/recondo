@@ -49,6 +49,14 @@ pub struct CostTotalQueryVars {
     pub period: TimeWindow,
 }
 
+/// Variables describing the next Agents-lens GraphQL queries (summary,
+/// framework distribution, top developers, top repositories). All four
+/// share the same `period` projection from the active TimeWindow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgentsQueryVars {
+    pub period: TimeWindow,
+}
+
 pub struct AppState {
     mode: Mode,
     history: HistoryStack,
@@ -154,7 +162,22 @@ impl AppState {
             LensUpdate::CostBreakdown(rows) => self.cost.set_breakdown(rows),
             LensUpdate::CostTotal(total, delta) => self.cost.set_total(total, delta),
             LensUpdate::CostDaily(values) => self.cost.set_daily(values),
+            LensUpdate::AgentsSummary(s) => self.agents.set_summary(s),
+            LensUpdate::AgentsFrameworkDist(rows) => self.agents.set_framework_distribution(rows),
+            LensUpdate::AgentsTopDevs(rows) => self.agents.set_top_devs(rows),
+            LensUpdate::AgentsTopRepos(rows) => self.agents.set_top_repos(rows),
         }
+    }
+
+    /// Returns the agents-lens query variables when Agents is the active lens.
+    /// `None` outside the Agents lens — the polling tasks will skip the tick.
+    pub fn agents_query_vars(&self) -> Option<AgentsQueryVars> {
+        if !matches!(self.history.current(), Lens::Agents) {
+            return None;
+        }
+        Some(AgentsQueryVars {
+            period: self.window,
+        })
     }
 
     /// Returns the cost-breakdown query variables when Cost is the active lens.
