@@ -21,7 +21,9 @@
  *   - prompt_token_reuse_ratio = (turns whose md5(user_request_text)
  *     appears in MORE than one turn within the session) / total turns.
  *     md5 is computed on-the-fly via SQL `md5(...)`; there is NO
- *     `prompt_hash` column on `turns`.
+ *     `prompt_hash` column on `turns`. Turns with NULL user_request_text
+ *     count toward the denominator (total turns) but cannot match the
+ *     numerator — they conservatively dilute the ratio.
  *
  *   - tokens_per_turn = { p50, p99, mean } over (input_tokens +
  *     output_tokens) per turn, using `percentile_disc(0.50/0.99) WITHIN
