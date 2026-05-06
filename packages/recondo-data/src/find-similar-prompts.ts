@@ -130,6 +130,7 @@ async function* iterateSimilar(
     // subquery yields NULL or empty. Differentiate: a missing row should
     // throw; a NULL prompt should yield nothing.
     if (result.rows.length === 0) {
+      throwIfAborted(signal);
       const probe = await pool.query(
         `SELECT id, user_request_text FROM turns WHERE id = $1`,
         [turnId],
