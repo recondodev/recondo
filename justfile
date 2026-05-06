@@ -461,3 +461,19 @@ tui-run *ARGS:
 # Run TUI tests via nextest (matches the workspace test runner)
 tui-test:
     cd tui && cargo nextest run
+
+# @recondo/data foundation (Plan B chunk 1)
+data-build:
+    pnpm --filter @recondo/data build
+
+data-test:
+    pnpm --filter @recondo/data test
+
+data-lint-arch:
+    pnpm --filter @recondo/data run lint:arch
+
+ws-install:
+    pnpm install
+
+check-versions:
+    node scripts/version-check.mjs

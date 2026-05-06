@@ -13,6 +13,10 @@ dist/
 .env
 .env.*
 
+# pnpm
+.pnpm-store/
+pnpm-debug.log*
+
 # Python
 __pycache__/
 *.pyc
