@@ -187,9 +187,13 @@ describe("maskPlaceholderPaths", () => {
 
 describe("FIND-1-M — API-level integration smoke", () => {
   it("mappers.ts imports maskPlaceholderPaths and wires it into Turn/ToolCall mappings", () => {
+    // C3: mappers.ts moved from `api/src/resolvers/` to
+    // `packages/recondo-data/src/`. The api-side path is now a
+    // re-export shim, so we read the canonical source from the
+    // package directly.
     const repoRoot = resolve(__dirname, "../../..");
     const mappersSrc = readFileSync(
-      resolve(repoRoot, "api/src/resolvers/mappers.ts"),
+      resolve(repoRoot, "packages/recondo-data/src/mappers.ts"),
       "utf-8",
     );
     expect(mappersSrc).toContain("maskPlaceholderPaths");

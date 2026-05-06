@@ -45,3 +45,24 @@ export {
   placeholderLikePatterns,
   looksLikePathProbe,
 } from "./redaction/index.js";
+
+// Auth — header parsing + token validation.
+export { authenticateApiKey, authenticateRequest } from "./auth.js";
+
+// Row mappers (PostgreSQL snake_case -> GraphQL camelCase) + helpers.
+export {
+  mapSession,
+  mapTurn,
+  mapToolCall,
+  mapAnomaly,
+  escapeIlike,
+  formatTimestamp,
+} from "./mappers.js";
+export type {
+  MappedSession,
+  MappedUserTurn,
+  MappedAttachment,
+  MappedTurn,
+  MappedToolCall,
+  MappedAnomaly,
+} from "./mappers.js";
