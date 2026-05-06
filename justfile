@@ -462,18 +462,32 @@ tui-run *ARGS:
 tui-test:
     cd tui && cargo nextest run
 
-# @recondo/data foundation (Plan B chunk 1)
+# @recondo/data package
 data-build:
     pnpm --filter @recondo/data build
 
 data-test:
     pnpm --filter @recondo/data test
 
+data-test-types:
+    pnpm --filter @recondo/data run test:types
+
 data-lint-arch:
     pnpm --filter @recondo/data run lint:arch
 
+# Workspace pipeline
 ws-install:
     pnpm install
 
+ws-build:
+    pnpm -r build
+
+ws-test:
+    pnpm -r test
+
 check-versions:
     node scripts/version-check.mjs
+
+# Full TypeScript-side CI (data lint + version check + build + tests + api tests)
+ci-typescript: ws-install data-lint-arch check-versions data-build data-test data-test-types
+    cd api && pnpm test

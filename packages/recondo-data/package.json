@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsc",
     "test": "node scripts/check-no-transport-imports.mjs && vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.test.json",
     "lint:arch": "node scripts/check-no-transport-imports.mjs",
     "test:watch": "vitest"
   },
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
+    "expect-type": "^1.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }
