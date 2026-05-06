@@ -31,14 +31,25 @@
  *       - "prompt", "response", "model", "tools" → null.
  *     The implementation does NOT hardcode delta=0 anywhere; it always
  *     derives from the underlying scalars.
+ *     Numeric aspects: a turn whose column is NULL is treated as 0 for
+ *     the delta computation. Untested by D-CT3 (all seeded turns have
+ *     non-null cost_usd / token totals); behavior is documented contract,
+ *     not regression-guarded.
  *
  *  4. Caller `turn_ids` order is preserved in:
  *       - `result.turn_ids`           (echoed verbatim)
  *       - each row's `values` keys    (insertion order matches caller order)
+ *     turn_ids may NOT contain duplicates. Behavior on duplicates is
+ *     undefined: result.turn_ids echoes verbatim, but each row's values
+ *     map collapses duplicates to a single key. Callers should dedupe
+ *     upstream.
  *
  *  5. Empty `turn_ids` array throws SYNCHRONOUSLY (matches the C1
  *     getTurnRawChunk pattern: outer regular function validates +
  *     delegates to inner async helper).
+ *     `aspects: []` is treated as "use defaults" (NOT "no aspects"). Pass
+ *     undefined to opt into defaults; pass an explicit non-empty list to
+ *     narrow.
  *
  *  6. Missing turn id (provided id without a row in `turns`) → reject
  *     with an Error whose message contains every missing id.
