@@ -104,6 +104,13 @@ export type {
   CompareTurnsResult,
 } from "./compare-turns.js";
 
+// Find similar prompts (C3): byte-identical match by turn id or literal text.
+export { findSimilarPrompts } from "./find-similar-prompts.js";
+export type {
+  SimilarPromptMatch,
+  FindSimilarPromptsInput,
+} from "./find-similar-prompts.js";
+
 // Object store (local driver). Future drivers (S3) will land alongside.
 export { LocalObjectStore } from "./object-store/local.js";
 export type { LocalObjectStoreOpts } from "./object-store/local.js";
