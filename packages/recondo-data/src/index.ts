@@ -191,3 +191,34 @@ export type {
   GenerateReportPayload,
   GenerateReportError,
 } from "./reports.js";
+
+// Policies: list + detail + trigger-history trend + create/update/delete.
+export {
+  listPolicies,
+  getPolicy,
+  listPolicyTriggerHistory,
+  createPolicy,
+  updatePolicy,
+  deletePolicy,
+} from "./policies.js";
+export type {
+  PolicyRow,
+  PolicyFilter,
+  PolicyTrendPoint,
+  CreatePolicyInput,
+  UpdatePolicyInput,
+} from "./policies.js";
+
+// Registered LLM API keys: list + create/revoke (operates on registered_keys
+// table; the resolver layer keeps the GraphQL operation names registeredKeys
+// / registerKey / deleteKey for dashboard compatibility).
+export {
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+} from "./keys.js";
+export type {
+  ApiKeyRecord,
+  ApiKeyFilter,
+  CreateApiKeyInput,
+} from "./keys.js";
