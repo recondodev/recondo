@@ -72,16 +72,20 @@ export async function authenticateApiKey(
   // the worst case is a wasted query — but the caller's promise rejects
   // immediately and the consumer can move on.
   const result = options.signal
-    ? await Promise.race([
-        queryPromise,
-        new Promise<never>((_, reject) => {
-          const onAbort = () =>
-            reject(new DOMException("aborted", "AbortError"));
-          if (options.signal!.aborted) onAbort();
-          else
-            options.signal!.addEventListener("abort", onAbort, { once: true });
-        }),
-      ])
+    ? await (async () => {
+        const signal = options.signal!;
+        let onAbort!: () => void;
+        const abortP = new Promise<never>((_, reject) => {
+          onAbort = () => reject(new DOMException("aborted", "AbortError"));
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        });
+        try {
+          return await Promise.race([queryPromise, abortP]);
+        } finally {
+          signal.removeEventListener("abort", onAbort);
+        }
+      })()
     : await queryPromise;
 
   if (result.rows.length === 0) return null;
@@ -112,8 +116,7 @@ export async function authenticateRequest(
   options: QueryOptions = {},
 ): Promise<ApiKeyInfo | null> {
   if (!authHeader) return null;
-  const trimmedHeader = authHeader.trim();
-  if (!trimmedHeader.toLowerCase().startsWith("bearer ")) return null;
-  const token = trimmedHeader.slice(7).trim();
+  if (!authHeader.toLowerCase().startsWith("bearer ")) return null;
+  const token = authHeader.slice(7).trim();
   return authenticateApiKey(token, options);
 }
