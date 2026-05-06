@@ -12,7 +12,7 @@
 import { getPool } from "../db.js";
 import type { GqlContext } from "../context.js";
 import type { QueryResolvers } from "../generated/graphql.js";
-import { resolveDateRange } from "./cost.js";
+import { resolveDateRange } from "@recondo/data";
 import { formatTimestamp } from "./mappers.js";
 
 /**

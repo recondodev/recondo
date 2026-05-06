@@ -90,3 +90,33 @@ export type { SessionFilter, SessionListItem } from "./sessions.js";
 // AsyncIterable via Array.fromAsync.
 export { getTurn, searchTurns, verifyIntegrity } from "./turns.js";
 export type { VerifyIntegrityResult } from "./turns.js";
+
+// Anomalies: list with project scoping + since-cursor support.
+export { listAnomalies } from "./anomalies.js";
+export type { AnomaliesFilter } from "./anomalies.js";
+
+// Cost intelligence: usage summary, spend buckets, daily spend, projections.
+export {
+  resolveDateRange,
+  getUsageSummary,
+  listSpendByProvider,
+  listSpendByModel,
+  listSpendByFramework,
+  listDailySpend,
+  getCostProjections,
+} from "./cost.js";
+export type {
+  CostQueryArgs,
+  SpendBucket,
+  UsageSummary,
+  CostProjection,
+} from "./cost.js";
+
+// Audit trail: list events for GraphQL + bulk fetch for REST exports.
+export { listAuditEvents, getAuditEntries } from "./audit.js";
+export type {
+  AuditEntry,
+  AuditEventsFilter,
+  AuditEntriesOpts,
+  IntegrityStatusString,
+} from "./audit.js";

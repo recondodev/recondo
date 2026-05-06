@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { authenticateRequest } from "../auth.js";
 import { logAuditEntry } from "../audit.js";
 import { getSourceIp } from "../middleware/rest-helpers.js";
-import { getAuditEntries } from "../resolvers/audit.js";
+import { getAuditEntries } from "@recondo/data";
 
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
   /**
