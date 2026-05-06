@@ -67,6 +67,11 @@ import {
   // Related turns (Chunk 4, T6 — D-RT5)
   relatedTurns,
   type Relation,
+  // Tool call stats (Chunk 6, T8 — D-TS10)
+  toolCallStats,
+  type ToolCallStatsRow,
+  type ToolCallGroupBy,
+  type ToolCallPeriod,
 } from "../src/index.js";
 
 // auth
@@ -141,3 +146,49 @@ expectTypeOf<Relation>().toEqualTypeOf<
   "same_session" | "same_prompt_hash" | "retry_of"
 >();
 expectTypeOf(relatedTurns).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+
+// tool call stats (C6 / T8)
+//
+// D-TS10: ToolCallStatsRow MUST NOT include a `token_cost_total` field.
+// The `tool_calls` table has NO `token_cost` column, so any output type
+// or SQL referencing `token_cost*` is incorrect by construction. The
+// `total_duration_ms = SUM(duration_ms)` field replaces the legacy
+// token-cost aggregate.
+//
+// The cleanest static guard: assert the closed key-set of the row type.
+// `toEqualTypeOf` is bidirectional — adding `token_cost_total` (or any
+// other field) makes this fail to compile, AND removing any of the
+// documented fields makes it fail to compile. This catches:
+//   - implementer reintroducing the legacy `token_cost_total` field, AND
+//   - implementer dropping a required field by typo.
+expectTypeOf<ToolCallStatsRow>().toEqualTypeOf<{
+  group_key: string;
+  total_calls: number;
+  failure_rate: number;
+  avg_latency_ms: number;
+  total_duration_ms: number;
+}>();
+
+// Belt-and-suspenders: explicit assertion that the legacy field is NOT
+// part of the row type (a `key in T` test forced into the type system).
+type _NoTokenCostTotal = "token_cost_total" extends keyof ToolCallStatsRow
+  ? never
+  : true;
+const _ttGuard: _NoTokenCostTotal = true;
+void _ttGuard;
+
+// Group-by / period vocabularies are the closed sets we documented.
+expectTypeOf<ToolCallGroupBy>().toEqualTypeOf<
+  "tool_name" | "session" | "framework"
+>();
+expectTypeOf<ToolCallPeriod>().toEqualTypeOf<"24h" | "7d" | "30d" | "all">();
+
+// toolCallStats accepts a single options object containing `signal`.
+expectTypeOf(toolCallStats).parameter(0).toMatchTypeOf<{
+  group_by: ToolCallGroupBy;
+  period: ToolCallPeriod;
+  signal?: AbortSignal;
+}>();
+
+// Return type is AsyncIterable<ToolCallStatsRow> (NOT Promise<Row[]>).
+expectTypeOf(toolCallStats).returns.toMatchTypeOf<AsyncIterable<ToolCallStatsRow>>();

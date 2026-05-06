@@ -126,6 +126,17 @@ export type {
   PercentileSummary,
 } from "./session-efficiency.js";
 
+// Tool call stats (C6, T8): grouped tool-call aggregate yielding per-group
+// total_calls / failure_rate / avg_latency_ms / total_duration_ms, with
+// configurable group_by (tool_name | session | framework) and period
+// (24h | 7d | 30d | all).
+export { toolCallStats } from "./tool-call-stats.js";
+export type {
+  ToolCallStatsRow,
+  ToolCallGroupBy,
+  ToolCallPeriod,
+} from "./tool-call-stats.js";
+
 // Object store (local driver). Future drivers (S3) will land alongside.
 export { LocalObjectStore } from "./object-store/local.js";
 export type { LocalObjectStoreOpts } from "./object-store/local.js";
