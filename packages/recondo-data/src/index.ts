@@ -80,3 +80,13 @@ export {
   listStructuredProvenance,
   runStructuredQuery,
 } from "./structured-query.js";
+
+// Sessions: list / detail / userTurns. The GraphQL Connection
+// re-shaping (items/total/limit/offset) stays in api/.
+export { listSessions, getSession, listUserTurns } from "./sessions.js";
+export type { SessionFilter, SessionListItem } from "./sessions.js";
+
+// Turns: detail + search + verify. The api/ resolver materialises the
+// AsyncIterable via Array.fromAsync.
+export { getTurn, searchTurns, verifyIntegrity } from "./turns.js";
+export type { VerifyIntegrityResult } from "./turns.js";
