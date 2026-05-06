@@ -120,3 +120,74 @@ export type {
   AuditEntriesOpts,
   IntegrityStatusString,
 } from "./audit.js";
+
+// Compliance posture: summary, frameworks, audit log + control mutation.
+export {
+  getComplianceSummary,
+  listComplianceFrameworks,
+  listComplianceAuditLog,
+  listComplianceFindings,
+  updateControlStatus,
+} from "./compliance.js";
+export type {
+  ComplianceSummaryRow,
+  ComplianceFrameworkRow,
+  ComplianceControlRow,
+  ComplianceAuditEntry,
+  ComplianceAuditFilter,
+  ComplianceFindingsBySeverity,
+  UpdateControlInput,
+  UpdateControlPayload,
+  UpdateControlError,
+} from "./compliance.js";
+
+// Realtime: stats, feed (AsyncIterable), gateway status, shared SQL helpers.
+export {
+  getRealtimeStats,
+  listRealtimeFeed,
+  getGatewayStatus,
+  buildGroupingCTEs,
+  EXCLUDE_PURE_PREFLIGHT_SQL,
+} from "./realtime.js";
+export type {
+  RealtimeStatsRow,
+  RealtimeFeedArgs,
+  RealtimeFeedItem,
+  RealtimeLatencySourceString,
+  GatewayStatusRow,
+} from "./realtime.js";
+
+// Agent analytics: summary, framework distribution, top devs/repos, activity.
+export {
+  getAgentSummary,
+  listAgentFrameworkDistribution,
+  listTopDevelopers,
+  listTopRepositories,
+  listAgentActivity,
+} from "./agents.js";
+export type {
+  AgentQueryArgs,
+  AgentSummaryRow,
+  AgentFrameworkUsage,
+  DeveloperRow,
+  RepositoryRow,
+  AgentActivityRow,
+} from "./agents.js";
+
+// Compliance reports: list + detail + trends + generate mutation.
+export {
+  listReports,
+  getReport,
+  listReportCoverageTrend,
+  listReportFindingsTrend,
+  generateReport,
+} from "./reports.js";
+export type {
+  ReportRow,
+  ReportFilter,
+  ReportFindings,
+  TrendPoint,
+  GenerateReportInput,
+  GenerateReportPayload,
+  GenerateReportError,
+} from "./reports.js";
