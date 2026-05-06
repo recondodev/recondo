@@ -66,3 +66,17 @@ export type {
   MappedToolCall,
   MappedAnomaly,
 } from "./mappers.js";
+
+// Structured query primitives — per-operation iterables + the legacy
+// /v1/query dispatcher.
+export {
+  listStructuredSessions,
+  listStructuredTurns,
+  listStructuredAnomalies,
+  listStructuredCost,
+  listStructuredTools,
+  listStructuredRisk,
+  listStructuredCompliance,
+  listStructuredProvenance,
+  runStructuredQuery,
+} from "./structured-query.js";
