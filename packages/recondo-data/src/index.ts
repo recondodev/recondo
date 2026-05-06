@@ -117,6 +117,15 @@ export type {
 export { relatedTurns } from "./related-turns.js";
 export type { Relation, RelatedTurnsRow } from "./related-turns.js";
 
+// Session efficiency (C5, T7): single-round-trip aggregate summarizing
+// cache hit rate, prompt reuse, tokens-per-turn percentile summary,
+// redundant tool calls, and TTFT percentile summary for a session.
+export { sessionEfficiency } from "./session-efficiency.js";
+export type {
+  SessionEfficiency,
+  PercentileSummary,
+} from "./session-efficiency.js";
+
 // Object store (local driver). Future drivers (S3) will land alongside.
 export { LocalObjectStore } from "./object-store/local.js";
 export type { LocalObjectStoreOpts } from "./object-store/local.js";
