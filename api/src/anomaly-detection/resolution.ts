@@ -7,9 +7,8 @@
  * Project-scoped, authenticated, audit-logged. Admin can resolve any anomaly.
  */
 
-import { getPool } from "../db.js";
+import { getPool, sanitizeAnomalyRow } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
-import { sanitizeAnomalyRow } from "../placeholder-mask.js";
 
 // ---------------------------------------------------------------------------
 // PATCH /v1/anomalies/:id/resolve

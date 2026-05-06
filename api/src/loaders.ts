@@ -11,8 +11,8 @@
 
 import DataLoader from "dataloader";
 import type pg from "pg";
-import { mapTurn, mapToolCall, mapAnomaly, mapSession } from "./resolvers/mappers.js";
-import type { MappedAttachment } from "./resolvers/mappers.js";
+import { mapTurn, mapToolCall, mapAnomaly, mapSession } from "@recondo/data";
+import type { MappedAttachment } from "@recondo/data";
 
 // W1: Explicit column lists matching what each mapper actually uses.
 // This avoids pulling unnecessary data and documents the contract between

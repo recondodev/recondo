@@ -10,8 +10,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { authenticateRequest } from "../auth.js";
-import { getPool } from "../db.js";
+import { authenticateRequest, getPool } from "@recondo/data";
 
 export async function reportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/reports/:id/download", async (request, reply) => {

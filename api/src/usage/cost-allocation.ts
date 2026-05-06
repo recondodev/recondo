@@ -5,7 +5,7 @@
  * Supports period filtering (daily/weekly/monthly) and date range filtering.
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 import { VALID_PERIODS, dateTruncExpr, DATE_FORMAT_RE } from "./utils.js";
 

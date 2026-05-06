@@ -12,9 +12,8 @@
  * Auth required, project scoped.
  */
 
-import { getPool } from "../db.js";
+import { getPool, maskPlaceholderPaths } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
-import { maskPlaceholderPaths } from "../placeholder-mask.js";
 
 const QUERY_LIMIT = 10000;
 

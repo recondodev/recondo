@@ -11,12 +11,11 @@ import { fastifyApolloDrainPlugin } from "@as-integrations/fastify";
 import { GraphQLError, type ValidationContext, type ASTVisitor } from "graphql";
 import { typeDefs } from "../schema.js";
 import { resolvers } from "../resolvers.js";
-import { authenticateRequest } from "../auth.js";
+import { authenticateRequest, getPool } from "@recondo/data";
 import { logAuditEntry } from "../audit.js";
 import { checkRateLimit, resetRateLimits } from "../ratelimit.js";
 import type { GqlContext } from "../context.js";
 import { getSourceIp } from "../middleware/rest-helpers.js";
-import { getPool } from "../db.js";
 import { createLoaders } from "../loaders.js";
 
 // R2-W4: Query depth limiter -- rejects queries deeper than MAX_DEPTH levels

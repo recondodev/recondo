@@ -18,7 +18,7 @@
  *
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 interface TemplateSection {

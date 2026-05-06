@@ -11,7 +11,7 @@
  * - ongoingMonitoring: completeness metrics, availability metrics, cost trends
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 function inferProvider(modelId: string): string {

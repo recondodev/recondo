@@ -16,9 +16,8 @@
 
 import { createHash } from "crypto";
 import type pg from "pg";
-import { getPool } from "./db.js";
+import { getPool, maskPlaceholderPaths } from "@recondo/data";
 import type { ApiKeyInfo } from "./context.js";
-import { maskPlaceholderPaths } from "./placeholder-mask.js";
 
 // N5 fix: AttestationRequest interface removed — input validation is done
 // inline with runtime type checks, not static types on untyped body.

@@ -1,5 +1,5 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
-import { MappedSession, MappedTurn, MappedToolCall, MappedAnomaly, MappedUserTurn, MappedAttachment } from '../resolvers/mappers.js';
+import { MappedSession, MappedTurn, MappedToolCall, MappedAnomaly, MappedUserTurn, MappedAttachment } from '@recondo/data';
 import { GqlContext } from '../context.js';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;

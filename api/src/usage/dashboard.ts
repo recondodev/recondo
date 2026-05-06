@@ -14,7 +14,7 @@
  * should use these endpoints; clients tolerating minutes/hours of lag may query MVs.
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 import { VALID_PERIODS, dateTruncExpr } from "./utils.js";
 

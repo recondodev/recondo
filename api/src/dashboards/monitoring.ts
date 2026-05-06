@@ -15,7 +15,7 @@
  * Returns the full monitoring dashboard for an authenticated key
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 interface MonitoringQuery {

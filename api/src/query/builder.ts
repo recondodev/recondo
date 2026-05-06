@@ -232,7 +232,8 @@ function formatNarrative(
 
 export async function handleQuery(
   body: Record<string, unknown>,
-  apiKey: ApiKeyInfo
+  apiKey: ApiKeyInfo,
+  signal?: AbortSignal
 ): Promise<QueryResult> {
   const req = body as QueryRequest;
 
@@ -335,15 +336,15 @@ export async function handleQuery(
 
   // 30s client-side timeout via Promise.race. Server-side
   // statement_timeout was removed (N1/N2 fix — wrong pool connection).
-  // TODO(plan-task-16): wire a per-request AbortController into
-  // runStructuredQuery's options.signal once chunk-9 lands.
+  // C9: per-request AbortSignal threaded through to runStructuredQuery
+  // when the Fastify route observes a client disconnect.
   let rows: Record<string, unknown>[];
   let totalCount: number;
 
   try {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const result = await Promise.race([
-      runStructuredQuery(queryType, projectId, filters, groupBy, effectiveLimit)
+      runStructuredQuery(queryType, projectId, filters, groupBy, effectiveLimit, { signal })
         .finally(() => { if (timer) clearTimeout(timer); }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error("Query timeout (30s)")), 30_000);

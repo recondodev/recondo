@@ -17,12 +17,12 @@ const config: CodegenConfig = {
         // resolver fields like `turns`). The nested fields are resolved
         // by their own resolver functions, not the parent mapper.
         mappers: {
-          Session: "../resolvers/mappers.js#MappedSession",
-          Turn: "../resolvers/mappers.js#MappedTurn",
-          ToolCall: "../resolvers/mappers.js#MappedToolCall",
-          AnomalyEvent: "../resolvers/mappers.js#MappedAnomaly",
-          UserTurn: "../resolvers/mappers.js#MappedUserTurn",
-          Attachment: "../resolvers/mappers.js#MappedAttachment",
+          Session: "@recondo/data#MappedSession",
+          Turn: "@recondo/data#MappedTurn",
+          ToolCall: "@recondo/data#MappedToolCall",
+          AnomalyEvent: "@recondo/data#MappedAnomaly",
+          UserTurn: "@recondo/data#MappedUserTurn",
+          Attachment: "@recondo/data#MappedAttachment",
         },
       },
     },

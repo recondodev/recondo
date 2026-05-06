@@ -36,10 +36,9 @@ import {
   NoSuchKey,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { authenticateRequest } from "../auth.js";
+import { authenticateRequest, getPool } from "@recondo/data";
 import { logAuditEntry } from "../audit.js";
 import { getSourceIp } from "../middleware/rest-helpers.js";
-import { getPool } from "../db.js";
 
 // Lazy singleton S3 client. Initialized on first attachment fetch when
 // `RECONDO_OBJECTS=s3`. The endpoint URL, region, and credentials come
