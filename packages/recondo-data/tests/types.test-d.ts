@@ -64,6 +64,9 @@ import {
   listStructuredRisk,
   listStructuredCompliance,
   listStructuredProvenance,
+  // Related turns (Chunk 4, T6 — D-RT5)
+  relatedTurns,
+  type Relation,
 } from "../src/index.js";
 
 // auth
@@ -127,3 +130,14 @@ expectTypeOf(listStructuredTools).parameter(2).toMatchTypeOf<{ signal?: AbortSig
 expectTypeOf(listStructuredRisk).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(listStructuredCompliance).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(listStructuredProvenance).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+
+// related turns
+// D-RT5: Relation type has EXACTLY 3 members. The legacy "caused_by" and
+// "same_tool_chain" relations are DROPPED because their backing columns
+// (`caused_by_turn_id`, `tool_chain_id`) do not exist on `turns`.
+// `toEqualTypeOf` is bidirectional — adding OR removing a member from
+// `Relation` makes this assertion fail to compile.
+expectTypeOf<Relation>().toEqualTypeOf<
+  "same_session" | "same_prompt_hash" | "retry_of"
+>();
+expectTypeOf(relatedTurns).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();

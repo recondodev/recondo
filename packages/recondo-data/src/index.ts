@@ -111,6 +111,12 @@ export type {
   FindSimilarPromptsInput,
 } from "./find-similar-prompts.js";
 
+// Related turns (C4, T6): yield turns related to a given turn by one of
+// three relations — same_session, same_prompt_hash, retry_of (mapped to
+// supersedes_turn_id).
+export { relatedTurns } from "./related-turns.js";
+export type { Relation, RelatedTurnsRow } from "./related-turns.js";
+
 // Object store (local driver). Future drivers (S3) will land alongside.
 export { LocalObjectStore } from "./object-store/local.js";
 export type { LocalObjectStoreOpts } from "./object-store/local.js";
