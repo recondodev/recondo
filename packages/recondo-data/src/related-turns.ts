@@ -20,15 +20,19 @@
  *     in-SQL via `md5(...)`. Cross-session matches are valid because the
  *     md5 space is global.
  *
- *  3. `retry_of` — chained in BOTH directions via `supersedes_turn_id`.
+ *  3. `retry_of` — returns the CONNECTED COMPONENT of the input turn
+ *     under the `supersedes_turn_id` relation, excluding the input
+ *     itself. That is: the input's parent
+ *     (`input.supersedes_turn_id`), the input's children (turns whose
+ *     `supersedes_turn_id = input.id`), and co-retry siblings (turns
+ *     sharing the input's parent). This generalizes "the chain in both
+ *     directions" to the natural retry equivalence class — every node
+ *     reachable in one hop on the supersedes graph — so any node in a
+ *     retry cluster surfaces every other node.
+ *
  *     The orchestration plan dropped the never-shipped `retry_of_turn_id`
  *     column; this relation is built ENTIRELY on top of
- *     `supersedes_turn_id`. The result set is:
- *       (a) every turn whose `supersedes_turn_id = $turnId` (turns that
- *           supersede the INPUT), PLUS
- *       (b) the turn referenced by the INPUT's own `supersedes_turn_id`
- *           (the parent the INPUT supersedes), if any.
- *     The input turn itself is excluded.
+ *     `supersedes_turn_id`.
  *
  *     Mapping disclosure (D-RT7): `retry_of` -> `supersedes_turn_id`.
  *
@@ -156,9 +160,8 @@ async function* iterateRelated(
       break;
     }
     case "retry_of": {
-      // Walk the supersedes chain in both directions so siblings (turns
-      // that supersede the same parent) and the parent itself are all
-      // surfaced. Specifically, a turn T is in the chain of input I when:
+      // Connected component of the input turn under the supersedes
+      // graph: a turn T is in the result set for input I iff one of
       //   (a) T.supersedes_turn_id = I            (children of the input)
       //   (b) T.id = I.supersedes_turn_id         (the parent of the input)
       //   (c) T.supersedes_turn_id IS NOT NULL
