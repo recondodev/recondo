@@ -72,6 +72,16 @@ import {
   type ToolCallStatsRow,
   type ToolCallGroupBy,
   type ToolCallPeriod,
+  // C7 D-CT-SCALAR: scalar (Promise-returning) ops MUST accept
+  // `{ signal?: AbortSignal }` as their final options parameter.
+  getTurnRawMetadata,
+  getTurnRawChunk,
+  compareTurns,
+  sessionEfficiency,
+  // C7 D-CT-LIST: AsyncIterable-returning list ops also accept signal
+  // (plus a few extras like `limit`); we assert the options-arg shape so a
+  // future refactor cannot drop signal from the iterable surface.
+  findSimilarPrompts,
 } from "../src/index.js";
 
 // auth
@@ -192,3 +202,43 @@ expectTypeOf(toolCallStats).parameter(0).toMatchTypeOf<{
 
 // Return type is AsyncIterable<ToolCallStatsRow> (NOT Promise<Row[]>).
 expectTypeOf(toolCallStats).returns.toMatchTypeOf<AsyncIterable<ToolCallStatsRow>>();
+
+// ---------------------------------------------------------------------------
+// C7 D-CT-SCALAR: scalar Promise-returning ops accept `{ signal?: AbortSignal }`.
+//
+// Each of these is a single-row aggregate (NOT an AsyncIterable). The
+// orchestration C7 contract is that the FINAL options parameter is a plain
+// object whose `signal` field is an AbortSignal (optional). We assert with
+// `toMatchTypeOf<{ signal?: AbortSignal } | undefined>` so an implementer
+// who overcommits the options shape (e.g. requires extra fields) will fail
+// to compile against this assertion.
+// ---------------------------------------------------------------------------
+
+// getTurnRawMetadata(turnId, options?)
+expectTypeOf(getTurnRawMetadata).parameter(1).toMatchTypeOf<
+  { signal?: AbortSignal } | undefined
+>();
+
+// getTurnRawChunk(turnId, offset, length, options?)
+expectTypeOf(getTurnRawChunk).parameter(3).toMatchTypeOf<
+  { signal?: AbortSignal } | undefined
+>();
+
+// compareTurns(turn_ids, options?)
+expectTypeOf(compareTurns).parameter(1).toMatchTypeOf<
+  { signal?: AbortSignal } | undefined
+>();
+
+// sessionEfficiency(sessionId, options?)
+expectTypeOf(sessionEfficiency).parameter(1).toMatchTypeOf<
+  { signal?: AbortSignal } | undefined
+>();
+
+// ---------------------------------------------------------------------------
+// C7 D-CT-LIST: findSimilarPrompts options also accept signal. relatedTurns
+// is already covered above (line 148). toolCallStats is covered by the
+// `parameter(0)` shape match above (lines 187..191).
+// ---------------------------------------------------------------------------
+expectTypeOf(findSimilarPrompts).parameter(1).toMatchTypeOf<
+  { limit?: number; signal?: AbortSignal } | undefined
+>();
