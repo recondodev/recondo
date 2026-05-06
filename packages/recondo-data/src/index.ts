@@ -91,6 +91,15 @@ export type { SessionFilter, SessionListItem } from "./sessions.js";
 export { getTurn, searchTurns, verifyIntegrity } from "./turns.js";
 export type { VerifyIntegrityResult } from "./turns.js";
 
+// Turn raw-body access (C1): metadata + chunked reads against the
+// content-addressable object store.
+export { getTurnRawMetadata, getTurnRawChunk } from "./turns-raw.js";
+export type { TurnRawMetadata, TurnRawChunk } from "./turns-raw.js";
+
+// Object store (local driver). Future drivers (S3) will land alongside.
+export { LocalObjectStore } from "./object-store/local.js";
+export type { LocalObjectStoreOpts } from "./object-store/local.js";
+
 // Anomalies: list with project scoping + since-cursor support.
 export { listAnomalies } from "./anomalies.js";
 export type { AnomaliesFilter } from "./anomalies.js";
