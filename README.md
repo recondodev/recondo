@@ -6,7 +6,9 @@
 
 **The visibility and control layer for coding-agent traffic.**
 
-On-prem gateway. Multi-vendor. Zero touch.
+Self-hosted. Multi-vendor. Zero touch.
+
+Run on-prem or in your own cloud account (AWS Terraform module included).
 
 Recondo sits on the network path between coding agents (Claude Code, Codex, Cursor, Aider, Gemini-based agents) and their LLM providers. Every request and response flows through it — visible in one place, controllable at the wire. Cap spend per team, redact secrets before they leave the network, route or block by provider, model, or developer.
 
