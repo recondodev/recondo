@@ -96,6 +96,14 @@ export type { VerifyIntegrityResult } from "./turns.js";
 export { getTurnRawMetadata, getTurnRawChunk } from "./turns-raw.js";
 export type { TurnRawMetadata, TurnRawChunk } from "./turns-raw.js";
 
+// Cross-turn comparison (C2): side-by-side aspect rows for a set of turns.
+export { compareTurns } from "./compare-turns.js";
+export type {
+  CompareAspect,
+  CompareTurnsRow,
+  CompareTurnsResult,
+} from "./compare-turns.js";
+
 // Object store (local driver). Future drivers (S3) will land alongside.
 export { LocalObjectStore } from "./object-store/local.js";
 export type { LocalObjectStoreOpts } from "./object-store/local.js";
