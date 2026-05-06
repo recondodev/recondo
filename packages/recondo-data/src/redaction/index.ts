@@ -1,6 +1,4 @@
-// Compatibility shim — real implementation lives in @recondo/data.
-// New code should import from "@recondo/data" (or
-// "@recondo/data" → redaction barrel) directly.
+// Barrel for the redaction subsystem.
 export {
   PLACEHOLDER_PREFIXES,
   MASKED_PLACEHOLDER_REPLACEMENT,
@@ -16,4 +14,4 @@ export {
   SQL_PREFIX_ALTERNATION,
   placeholderLikePatterns,
   looksLikePathProbe,
-} from "@recondo/data";
+} from "./placeholder-mask.js";

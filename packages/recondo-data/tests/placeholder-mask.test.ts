@@ -26,7 +26,7 @@ import {
   placeholderLikePatterns,
   looksLikePathProbe,
   sanitizeAnomalyRow,
-} from "../src/placeholder-mask.js";
+} from "../src/redaction/placeholder-mask.js";
 
 describe("FIND-1-M — gateway/dashboard placeholder-prefix parity", () => {
   // FIND-3-TS-3 fix: assert SET EQUALITY both directions against the
@@ -37,7 +37,7 @@ describe("FIND-1-M — gateway/dashboard placeholder-prefix parity", () => {
   // eliminates the drift-risk entirely; this test is belt-and-
   // suspenders against someone reverting to hardcoded lists.
   it("TS placeholder allow-list equals the shared JSON allow-list both directions", () => {
-    const repoRoot = resolve(__dirname, "../..");
+    const repoRoot = resolve(__dirname, "../../..");
     const sharedJsonRaw = readFileSync(
       resolve(repoRoot, "shared/placeholder-prefixes.json"),
       "utf-8",
@@ -51,7 +51,7 @@ describe("FIND-1-M — gateway/dashboard placeholder-prefix parity", () => {
     // `gateway/src/session/mod.rs`. If a refactor drops the
     // include_str! reference (e.g., someone inlines the prefixes
     // back), this grep fails loudly.
-    const repoRoot = resolve(__dirname, "../..");
+    const repoRoot = resolve(__dirname, "../../..");
     const gatewaySrc = readFileSync(
       resolve(repoRoot, "gateway/src/session/mod.rs"),
       "utf-8",
@@ -64,7 +64,7 @@ describe("FIND-1-M — gateway/dashboard placeholder-prefix parity", () => {
   });
 
   it("shared JSON replacement equals the TS MASKED_PLACEHOLDER_REPLACEMENT constant", () => {
-    const repoRoot = resolve(__dirname, "../..");
+    const repoRoot = resolve(__dirname, "../../..");
     const sharedJsonRaw = readFileSync(
       resolve(repoRoot, "shared/placeholder-prefixes.json"),
       "utf-8",
@@ -187,7 +187,7 @@ describe("maskPlaceholderPaths", () => {
 
 describe("FIND-1-M — API-level integration smoke", () => {
   it("mappers.ts imports maskPlaceholderPaths and wires it into Turn/ToolCall mappings", () => {
-    const repoRoot = resolve(__dirname, "../..");
+    const repoRoot = resolve(__dirname, "../../..");
     const mappersSrc = readFileSync(
       resolve(repoRoot, "api/src/resolvers/mappers.ts"),
       "utf-8",
@@ -214,7 +214,7 @@ describe("FIND-4-I — SQL prefix list derives from shared JSON", () => {
   });
 
   it("placeholderLikePatterns() returns one `%PREFIX source: %` per JSON entry", () => {
-    const pats = placeholderLikePatterns();
+    const pats = placeholderLikePatterns;
     expect(pats).toHaveLength(PLACEHOLDER_PREFIXES.length);
     for (const p of PLACEHOLDER_PREFIXES) {
       expect(pats).toContain(`%${p} source: %`);

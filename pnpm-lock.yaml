@@ -22,6 +22,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.2.0
         version: 11.2.0
+      '@recondo/data':
+        specifier: workspace:*
+        version: link:../packages/recondo-data
       dataloader:
         specifier: ^2.2.3
         version: 2.2.3

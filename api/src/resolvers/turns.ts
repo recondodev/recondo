@@ -156,7 +156,7 @@ const searchResolver: NonNullable<QueryResolvers["search"]> = async (
     const queryMatchesMaskedForm = MASKED_PLACEHOLDER_REPLACEMENT.toLowerCase().includes(
       args.query.toLowerCase(),
     ) && args.query.length > 0;
-    const placeholderPatterns = placeholderLikePatterns();
+    const placeholderPatterns = placeholderLikePatterns;
     const placeholderClauses: string[] = [];
     const placeholderParams: string[] = [];
     if (queryMatchesMaskedForm) {
@@ -207,7 +207,7 @@ const searchResolver: NonNullable<QueryResolvers["search"]> = async (
     const queryMatchesMaskedForm = MASKED_PLACEHOLDER_REPLACEMENT.toLowerCase().includes(
       args.query.toLowerCase(),
     ) && args.query.length > 0;
-    const placeholderPatterns = placeholderLikePatterns();
+    const placeholderPatterns = placeholderLikePatterns;
     const placeholderClauses: string[] = [];
     const placeholderParams: string[] = [];
     if (queryMatchesMaskedForm) {

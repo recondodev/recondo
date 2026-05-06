@@ -143,7 +143,7 @@ const sessionsResolver: NonNullable<QueryResolvers["sessions"]> = async (
 
     let exclusion = "";
     if (probe) {
-      const patterns = placeholderLikePatterns();
+      const patterns = placeholderLikePatterns;
       const clauses: string[] = [];
       for (const pat of patterns) {
         // FIND-6-I: ESCAPE '\\' for defence-in-depth — `%`/`_`/`\`
@@ -159,8 +159,8 @@ const sessionsResolver: NonNullable<QueryResolvers["sessions"]> = async (
 
     let expansion = "";
     if (queryMatchesMaskedForm) {
-      const probeParamCount = probe ? placeholderLikePatterns().length : 0;
-      const patterns = placeholderLikePatterns();
+      const probeParamCount = probe ? placeholderLikePatterns.length : 0;
+      const patterns = placeholderLikePatterns;
       const clauses: string[] = [];
       for (const pat of patterns) {
         clauses.push(
@@ -180,13 +180,13 @@ const sessionsResolver: NonNullable<QueryResolvers["sessions"]> = async (
     params.push(escapedSearch);
     idx++;
     if (probe) {
-      for (const pat of placeholderLikePatterns()) {
+      for (const pat of placeholderLikePatterns) {
         params.push(pat);
         idx++;
       }
     }
     if (queryMatchesMaskedForm) {
-      for (const pat of placeholderLikePatterns()) {
+      for (const pat of placeholderLikePatterns) {
         params.push(pat);
         idx++;
       }
