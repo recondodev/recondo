@@ -37,6 +37,11 @@ import { agentSummaryTool } from "./tools/agent-summary.js";
 import { agentFrameworkDistributionTool } from "./tools/agent-framework-distribution.js";
 import { topTool } from "./tools/top.js";
 import { toolCallStatsTool } from "./tools/tool-call-stats.js";
+import { auditTrailTool } from "./tools/audit-trail.js";
+import { anomaliesTool } from "./tools/anomalies.js";
+import { complianceTool } from "./tools/compliance.js";
+import { reportsTool } from "./tools/reports.js";
+import { reportTrendsTool } from "./tools/report-trends.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -188,6 +193,34 @@ export async function createMcpServer(
     resolveClientInfo,
   });
   registerReadTool(server, toolCallStatsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  // C8 — audit / anomaly / compliance / reports tools (5 total).
+  // NOTE: the `insights` tool is intentionally NOT registered (C0 §5 #1
+  // dropped it — no matching `data.insights` resolver exists).
+  registerReadTool(server, auditTrailTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, anomaliesTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, complianceTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, reportsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, reportTrendsTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
