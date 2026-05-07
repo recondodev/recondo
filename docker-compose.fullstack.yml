@@ -65,7 +65,7 @@ services:
       dockerfile: Dockerfile.api
     environment:
       DATABASE_URL: "postgres://recondo:recondo_dev@postgres:5432/recondo"
-    command: ["sh", "-c", "npm run migrate up"]
+    command: ["sh", "-c", "pnpm run migrate up"]
     restart: "no"
     depends_on:
       postgres:

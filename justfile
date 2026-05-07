@@ -405,27 +405,27 @@ codex:
 
 # ---------- API server (TypeScript GraphQL) ----------
 
-# Install API dependencies
+# Install API dependencies (pnpm workspace install — also links @recondo/data)
 api-setup:
-    cd api && npm install
+    pnpm install
 
 # Run API database migrations via node-pg-migrate
 api-migrate:
     cd api && \
       DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo" \
-      npm run migrate up
+      pnpm run migrate up
 
 # Create a new migration file (e.g., just api-migrate-create add-notification-system)
 api-migrate-create name:
     cd api && \
       DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo" \
-      npm run migrate create -- {{name}}
+      pnpm run migrate create -- {{name}}
 
 # Roll back the last applied migration
 api-migrate-down:
     cd api && \
       DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo" \
-      npm run migrate down
+      pnpm run migrate down
 
 # Start API server against local PostgreSQL (dev mode)
 api-dev:
@@ -444,7 +444,7 @@ api-test:
     @cd api && DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo_test" \
       NODE_ENV=test npx tsx src/index.ts &
     @sleep 3
-    cd api && npm test; \
+    cd api && pnpm test; \
       EXIT=$?; \
       pkill -f "tsx src/index.ts" 2>/dev/null; \
       exit $EXIT
@@ -455,13 +455,13 @@ api-check:
 
 # ---------- Dashboard (React frontend) ----------
 
-# Install dashboard dependencies
+# Install dashboard dependencies (pnpm workspace install)
 dashboard-setup:
-    cd dashboard && npm install
+    pnpm install
 
 # Start dashboard dev server (hot-reload on :5173, talks to API on :4000)
 dashboard-dev:
-    cd dashboard && npm run dev
+    cd dashboard && pnpm run dev
 
 
 # ---------- Cleanup ----------

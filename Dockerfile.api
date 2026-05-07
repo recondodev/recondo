@@ -17,42 +17,43 @@ RUN set -eu; \
     if [ -s /etc/ssl/recondo/bundle.pem ]; then echo "Installed corporate CA certificates"; fi
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/recondo/bundle.pem
 
-# Copy manifests first for layer caching
-COPY api/package.json api/package-lock.json* ./
+# pnpm — this repo is a pnpm workspace and `api/package.json` declares
+# `@recondo/data: workspace:*`. npm cannot resolve the `workspace:`
+# protocol (errors with EUNSUPPORTEDPROTOCOL).
+RUN npm install -g pnpm@10
 
-RUN npm install
+# Workspace manifests first for layer caching: install layer rebuilds
+# only when a package.json or the lockfile changes.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY api/package.json ./api/
+COPY packages/recondo-data/package.json ./packages/recondo-data/
 
-# Copy application source
-COPY api/src ./src
-COPY api/tsconfig.json ./
+RUN pnpm install --frozen-lockfile
 
-# Copy migration files (single source of truth for PostgreSQL schema)
-COPY api/migrations ./migrations
+# @recondo/data source — api compiles against its emitted .d.ts files,
+# so this package must be built before the api package.
+COPY packages/recondo-data/tsconfig.json ./packages/recondo-data/
+COPY packages/recondo-data/src ./packages/recondo-data/src
 
-# FIND-4-A: shared/placeholder-prefixes.json is the canonical allow-list
-# both the Rust gateway (via include_str!) and TypeScript API (via
-# loadSharedJson) consume. The TS module reads the file at import-time;
-# without this COPY, the API container fails to start with
-# "shared/placeholder-prefixes.json not found in any expected location".
-# The compiled layout is /app/dist/src/placeholder-mask.js — its
-# `__dirname/../../shared/...` candidate resolves to /app/shared/...
-# which this COPY populates.
+# api source
+COPY api/tsconfig.json ./api/
+COPY api/src ./api/src
+COPY api/migrations ./api/migrations
+
+# shared/placeholder-prefixes.json is loaded at runtime by
+# @recondo/data's placeholder-mask module. Its candidate path
+# `<dist/redaction>/../../../../shared/...` resolves to /app/shared
+# from /app/packages/recondo-data/dist/redaction.
 COPY shared ./shared
 
-# FIND-6-D: compile TypeScript to /app/dist/ at build time so the
-# image ships a production-ready JS bundle — not a live-tsx runtime.
-# `tsx` is a devDep and the runtime compile step was non-standard
-# for production: slower first response, larger attack surface,
-# dependency on dev tooling in prod. `npm run build` invokes `tsc`
-# against `tsconfig.json` with `outDir: dist` and `rootDir: .` so
-# the source tree layout (`src/...`) is preserved under `dist/`.
-RUN npm run build
+# Build @recondo/data first (api consumes its dist/), then the api.
+RUN pnpm --filter @recondo/data build && pnpm --filter recondo-api build
+
+WORKDIR /app/api
 
 EXPOSE 4000
 
-# FIND-6-D: run the compiled bundle, not tsx. The compiled
-# `placeholder-mask.js` lives at /app/dist/src/placeholder-mask.js;
-# its `__dirname/../../shared/...` candidate resolves to
-# /app/shared/placeholder-prefixes.json (already covered by the
-# loader's third candidate path).
+# Run the compiled bundle, not tsx. The compiled entrypoint is
+# /app/api/dist/src/index.js (rootDir: ".", outDir: "dist" preserves
+# the src/ layout under dist/).
 CMD ["node", "dist/src/index.js"]
