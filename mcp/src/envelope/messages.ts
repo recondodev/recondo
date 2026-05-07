@@ -5,27 +5,19 @@
  * with XML escaping so adversarial payloads (including a literal
  * `</captured_user_message>`) cannot break out of the wrapper.
  *
- * Role enum: user | assistant | tool_use | tool_result.
+ * Wrapper-tag mapping per Plan D §lines 506-511 (canonical TAG_BY_ROLE):
+ *   user        -> <captured_user_message>      (extended `_message` form)
+ *   assistant   -> <captured_assistant_message> (extended `_message` form)
+ *   tool_use    -> <captured_tool_use>          (bare `<captured_<role>>`)
+ *   tool_result -> <captured_tool_result>       (bare `<captured_<role>>`)
  *
- * Wrapper-tag mapping per Plan D §line 480:
- *   user          -> <captured_user_message>
- *   assistant     -> <captured_assistant>
- *   tool_use      -> <captured_tool_use>
- *   tool_result   -> <captured_tool_result>
+ * `user` and `assistant` use the extended `_message` form; `tool_use`
+ * and `tool_result` use the bare `<captured_<role>>` form.
  */
+
+import { escapeText } from "./xml.js";
 
 export type Role = "user" | "assistant" | "tool_use" | "tool_result";
-
-/**
- * Escape `&`, `<`, `>` in payload text. Order matters — `&` first so we
- * don't double-escape entity references introduced for `<` / `>`.
- */
-export function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
 
 export interface MessageEnvelope {
   role: Role;
@@ -34,9 +26,15 @@ export interface MessageEnvelope {
   content: string;
 }
 
-function tagFor(role: Role): string {
-  return role === "user" ? "captured_user_message" : `captured_${role}`;
-}
+/**
+ * Canonical role -> wrapper-tag map. Source: Plan D §lines 506-511.
+ */
+const TAG_BY_ROLE: Record<Role, string> = {
+  user: "captured_user_message",
+  assistant: "captured_assistant_message",
+  tool_use: "captured_tool_use",
+  tool_result: "captured_tool_result",
+};
 
 export function buildMessageEnvelope(
   role: Role,
@@ -44,8 +42,8 @@ export function buildMessageEnvelope(
   fromTurnId: string,
   text: string,
 ): MessageEnvelope {
-  const escaped = escapeXml(text);
-  const tag = tagFor(role);
+  const escaped = escapeText(text);
+  const tag = TAG_BY_ROLE[role];
   return {
     role,
     from_session_id: fromSessionId,

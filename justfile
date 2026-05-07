@@ -518,9 +518,11 @@ ws-test:
 check-versions:
     node scripts/version-check.mjs
 
-# Full TypeScript-side CI (data lint + version check + build + tests + api tests)
+# Full TypeScript-side CI (data lint + version check + build + tests + api tests + mcp tests)
 ci-typescript: ws-install data-lint-arch check-versions data-build data-test data-test-types
     cd api && pnpm test
+    pnpm --filter recondo-mcp build
+    pnpm --filter recondo-mcp test
 
 # ---------- MCP Server (recondo-mcp) ----------
 

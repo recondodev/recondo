@@ -6,7 +6,9 @@
  * be escaped so the wrapper still has exactly one legitimate close tag.
  * `&`, `<`, `>` all escape to entity refs.
  *
- * Roles: user | assistant | tool_use | tool_result.
+ * Roles: user | assistant | tool_use | tool_result. Per Plan D
+ * §lines 506-511, `user` and `assistant` use the extended `_message`
+ * form; `tool_use` and `tool_result` use the bare `<captured_<role>>`.
  */
 import { describe, it, expect } from "vitest";
 
@@ -57,16 +59,16 @@ describe("D-C1-9 buildMessageEnvelope", () => {
   });
 
   it("supports the 4-role enum and maps each to <captured_<role>>", () => {
-    // Test-writer-fix: tests #1-#3 above + Plan D §line 480 establish
-    // `<captured_user_message>` as the canonical wrapper for the `user`
-    // role; the other three roles use the bare `<captured_<role>>`
-    // form. The original 4-role assertion (`<captured_user>`)
-    // contradicted tests #1-#3 — no implementation can satisfy both.
-    // C1 implementer kept the user_message wrapper (matches Plan D)
-    // and adjusted only the user-role expectation in this loop.
+    // Plan D §lines 506-511 fixes the canonical TAG_BY_ROLE map:
+    //   user      -> <captured_user_message>      (extended `_message`)
+    //   assistant -> <captured_assistant_message> (extended `_message`)
+    //   tool_use  -> <captured_tool_use>          (bare `<captured_<role>>`)
+    //   tool_result -> <captured_tool_result>     (bare `<captured_<role>>`)
+    // `user` and `assistant` use the extended `_message` form;
+    // `tool_use` and `tool_result` use the bare `<captured_<role>>` form.
     const cases = [
       { role: "user", tag: "captured_user_message" },
-      { role: "assistant", tag: "captured_assistant" },
+      { role: "assistant", tag: "captured_assistant_message" },
       { role: "tool_use", tag: "captured_tool_use" },
       { role: "tool_result", tag: "captured_tool_result" },
     ] as const;

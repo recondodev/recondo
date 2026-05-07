@@ -9,8 +9,6 @@
  * verbatim for the binary entrypoint to dispatch in C12.
  */
 
-const KNOWN_FLAGS = new Set(["--allow-actions", "--allow-destructive"]);
-
 export interface ParsedFlags {
   allowActions: boolean;
   allowDestructive: boolean;
@@ -32,10 +30,7 @@ export function parseFlags(argv: string[]): ParsedFlags {
       continue;
     }
     if (token.startsWith("--")) {
-      if (!KNOWN_FLAGS.has(token)) {
-        throw new Error(`Unknown flag: ${token}`);
-      }
-      continue;
+      throw new Error(`Unknown flag: ${token}`);
     }
     remaining.push(token);
   }

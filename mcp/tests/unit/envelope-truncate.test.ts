@@ -70,5 +70,9 @@ describe("D-C1-12 enforceSingleRecordBudget", () => {
     const obj = out as { suggestion: unknown };
     expect(typeof obj.suggestion).toBe("string");
     expect((obj.suggestion as string).length).toBeGreaterThan(0);
+    // Suggestion must mention the field-scoping escape hatch + raw-metadata
+    // tool per Plan D §C3 so callers know how to recover.
+    expect(obj.suggestion).toContain("recondo_get_turn_raw_metadata");
+    expect(obj.suggestion).toContain("fields");
   });
 });

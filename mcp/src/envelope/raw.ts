@@ -8,7 +8,14 @@
  *
  * The base64 alphabet ([A-Za-z0-9+/=]) cannot contain `<` or `>`, so
  * even adversarial input bytes can never break out of the wrapper.
+ *
+ * Per Plan D §lines 546-568, this returns a structured object exposing
+ * the routing metadata (role/from_turn_id/offset/length) alongside the
+ * pre-rendered `content` string. Consumers can serialise the object as
+ * JSON for envelopes that group multiple raw chunks.
  */
+
+import { escapeAttr } from "./xml.js";
 
 export interface RawByteEnvelopeArgs {
   turnId: string;
@@ -17,26 +24,29 @@ export interface RawByteEnvelopeArgs {
   bytes: Buffer;
 }
 
-/**
- * Escape an attribute value: `&`, `"`, `<`, `>` -> entity refs.
- * Order matters — `&` first so we don't double-escape.
- */
-function escapeAttr(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+export interface RawByteEnvelope {
+  role: "raw";
+  from_turn_id: string;
+  offset: number;
+  length: number;
+  /** `<captured_raw_bytes ...>BASE64</captured_raw_bytes>` */
+  content: string;
 }
 
-export function buildRawByteEnvelope(args: RawByteEnvelopeArgs): string {
+export function buildRawByteEnvelope(args: RawByteEnvelopeArgs): RawByteEnvelope {
   const turnIdAttr = escapeAttr(args.turnId);
   const offset = Number.isFinite(args.offset) ? Math.trunc(args.offset) : 0;
   const length = Number.isFinite(args.length) ? Math.trunc(args.length) : 0;
   const b64 = args.bytes.toString("base64");
-  return (
+  const content =
     `<captured_raw_bytes turn_id="${turnIdAttr}" offset="${offset}" length="${length}">` +
     b64 +
-    `</captured_raw_bytes>`
-  );
+    `</captured_raw_bytes>`;
+  return {
+    role: "raw",
+    from_turn_id: args.turnId,
+    offset,
+    length,
+    content,
+  };
 }
