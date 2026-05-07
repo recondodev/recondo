@@ -18,6 +18,10 @@ import type { ParsedFlags } from "./config/flags.js";
 import { registerReadTool } from "./registry/register.js";
 import type { AuditWriter, ClientInfo } from "./registry/types.js";
 import { listSessionsTool } from "./tools/list-sessions.js";
+import { getSessionTool } from "./tools/get-session.js";
+import { getTurnTool } from "./tools/get-turn.js";
+import { getTurnRawMetadataTool } from "./tools/get-turn-raw-metadata.js";
+import { getTurnRawChunkTool } from "./tools/get-turn-raw-chunk.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -69,6 +73,26 @@ export async function createMcpServer(
   };
 
   registerReadTool(server, listSessionsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, getSessionTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, getTurnTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, getTurnRawMetadataTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, getTurnRawChunkTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
