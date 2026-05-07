@@ -2,12 +2,17 @@
  * `recondo_get_turn` — single-record turn lookup with captured-content
  * wrapping.
  *
- * Returns the turn record from the data layer with `userRequestText`
- * and `responseText` REPLACED IN PLACE by `MessageEnvelope` objects
- * (`<captured_user_message>...</captured_user_message>` /
- * `<captured_assistant_message>...</captured_assistant_message>`),
+ * Returns the turn record from the data layer with `userRequestText`,
+ * `responseText`, and `thinkingText` REPLACED IN PLACE by
+ * `MessageEnvelope` objects (`<captured_user_message>` /
+ * `<captured_assistant_message>` / `<captured_assistant_thinking>`),
  * so adversarial payloads cannot break out of the wrapper. Other
  * fields (model, costUsd, tokens, etc.) pass through unchanged.
+ *
+ * `thinkingText` is the captured chain-of-thought / reasoning text
+ * (Anthropic `thinking` content blocks). It is wrapped under a
+ * dedicated `assistant_thinking` role so consumers can route it
+ * separately from the final assistant message.
  *
  * `MappedTurn` (see `packages/recondo-data/src/mappers.ts:109`) does
  * NOT carry an inline `tool_calls` array; tool-call detail lives in
@@ -108,6 +113,15 @@ export const getTurnTool: ReadTool<GetTurnInput, unknown> = {
         sessionId,
         turnId,
         respText,
+      );
+    }
+    const thinkText = record.thinkingText;
+    if (typeof thinkText === "string") {
+      record.thinkingText = buildMessageEnvelope(
+        "assistant_thinking",
+        sessionId,
+        turnId,
+        thinkText,
       );
     }
 

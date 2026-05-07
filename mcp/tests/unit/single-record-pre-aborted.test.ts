@@ -105,7 +105,7 @@ describe("D-C3-5 pre-aborted signal — recondo_get_turn_raw_metadata", () => {
     const ctx = abortedCtx();
     await expect(
       getTurnRawMetadataTool.handler(
-        { turn_id: "t-1", side: "request" } as never,
+        { turn_id: "t-1" } as never,
         ctx,
       ),
     ).rejects.toThrow();
@@ -118,7 +118,7 @@ describe("D-C3-5 pre-aborted signal — recondo_get_turn_raw_chunk", () => {
     const ctx = abortedCtx();
     await expect(
       getTurnRawChunkTool.handler(
-        { turn_id: "t-1", side: "request", offset: 0, length: 100 } as never,
+        { turn_id: "t-1", offset: 0, length: 100 } as never,
         ctx,
       ),
     ).rejects.toThrow();

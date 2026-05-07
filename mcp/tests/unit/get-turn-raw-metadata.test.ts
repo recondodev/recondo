@@ -1,9 +1,9 @@
 /**
  * D-C3-3 (unit) — `recondo_get_turn_raw_metadata` tool: schema + handler.
  *
- * Contract pinned by C0 audit:
  *   - Tool name: `recondo_get_turn_raw_metadata`.
- *   - Input shape: { turn_id: string (non-empty), side: "request" | "response" }.
+ *   - Input shape: { turn_id: string (non-empty) }. Request-side only —
+ *     no `side` parameter; response-side raw access is a future tool.
  *   - Handler delegates to `getTurnRawMetadata(turnId, options)` from
  *     `@recondo/data` (turns-raw.ts) and SURFACES the data-layer's
  *     return shape verbatim — `{ content_hash, bytes_total,
@@ -70,43 +70,24 @@ describe("D-C3-3 getTurnRawMetadataInputSchema", () => {
   });
 
   it("schema requires turn_id", () => {
-    expect(() =>
-      getTurnRawMetadataInputSchema.parse({ side: "request" }),
-    ).toThrow();
+    expect(() => getTurnRawMetadataInputSchema.parse({})).toThrow();
   });
 
   it("schema rejects empty turn_id", () => {
     expect(() =>
-      getTurnRawMetadataInputSchema.parse({ turn_id: "", side: "request" }),
+      getTurnRawMetadataInputSchema.parse({ turn_id: "" }),
     ).toThrow();
   });
 
-  it("schema requires side", () => {
-    expect(() =>
-      getTurnRawMetadataInputSchema.parse({ turn_id: "t-1" }),
-    ).toThrow();
+  it("schema accepts turn_id alone (no `side` parameter in v1)", () => {
+    const parsed = getTurnRawMetadataInputSchema.parse({ turn_id: "t-1" });
+    expect(parsed.turn_id).toBe("t-1");
   });
 
-  it("schema accepts side='request'", () => {
-    const parsed = getTurnRawMetadataInputSchema.parse({
-      turn_id: "t-1",
-      side: "request",
-    });
-    expect(parsed.side).toBe("request");
-  });
-
-  it("schema accepts side='response'", () => {
-    const parsed = getTurnRawMetadataInputSchema.parse({
-      turn_id: "t-1",
-      side: "response",
-    });
-    expect(parsed.side).toBe("response");
-  });
-
-  it("schema rejects side outside the enum", () => {
-    expect(() =>
-      getTurnRawMetadataInputSchema.parse({ turn_id: "t-1", side: "BOGUS" }),
-    ).toThrow();
+  it("description mentions request-side scope (response is a future tool)", () => {
+    expect(getTurnRawMetadataTool.description.toLowerCase()).toContain(
+      "request",
+    );
   });
 });
 
@@ -128,7 +109,7 @@ describe("D-C3-3 getTurnRawMetadataTool handler", () => {
     const ctx = makeCtx();
 
     const result = (await getTurnRawMetadataTool.handler(
-      { turn_id: "turn-1", side: "request" } as never,
+      { turn_id: "turn-1" } as never,
       ctx,
     )) as Record<string, unknown>;
 
@@ -160,7 +141,7 @@ describe("D-C3-3 getTurnRawMetadataTool handler", () => {
     const ctx = makeCtx();
 
     const result = (await getTurnRawMetadataTool.handler(
-      { turn_id: "turn-1", side: "request" } as never,
+      { turn_id: "turn-1" } as never,
       ctx,
     )) as Record<string, unknown>;
 
@@ -182,7 +163,7 @@ describe("D-C3-3 getTurnRawMetadataTool handler", () => {
     const ctx = makeCtx({ abortSignal: ac.signal });
 
     await getTurnRawMetadataTool.handler(
-      { turn_id: "t-1", side: "request" } as never,
+      { turn_id: "t-1" } as never,
       ctx,
     );
 
@@ -204,7 +185,7 @@ describe("D-C3-3 getTurnRawMetadataTool handler", () => {
     const ctx = makeCtx();
 
     await getTurnRawMetadataTool.handler(
-      { turn_id: "abc-123", side: "response" } as never,
+      { turn_id: "abc-123" } as never,
       ctx,
     );
 
@@ -222,7 +203,7 @@ describe("D-C3-3 getTurnRawMetadataTool handler", () => {
 
     await expect(
       getTurnRawMetadataTool.handler(
-        { turn_id: "t-1", side: "request" } as never,
+        { turn_id: "t-1" } as never,
         ctx,
       ),
     ).rejects.toThrow();

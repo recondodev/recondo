@@ -84,7 +84,8 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — schema discovery", () => {
     expect(tool!.description!.length).toBeGreaterThanOrEqual(50);
     const required = (tool!.inputSchema?.required ?? []) as string[];
     expect(required).toContain("turn_id");
-    expect(required).toContain("side");
+    // No `side` parameter in v1 — request-side only.
+    expect(required).not.toContain("side");
   });
 
   it("recondo_get_turn_raw_chunk is registered with length capped at 32_768", async () => {
@@ -94,9 +95,10 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — schema discovery", () => {
     expect(tool!.description!.length).toBeGreaterThanOrEqual(50);
     const required = (tool!.inputSchema?.required ?? []) as string[];
     expect(required).toContain("turn_id");
-    expect(required).toContain("side");
     expect(required).toContain("offset");
     expect(required).toContain("length");
+    // No `side` parameter in v1 — request-side only.
+    expect(required).not.toContain("side");
 
     // Defensive Zod cap: the JSON-Schema MUST surface
     // `length.maximum === 32768` so the SDK rejects oversize calls
@@ -112,7 +114,6 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — schema discovery", () => {
         name: "recondo_get_turn_raw_chunk",
         arguments: {
           turn_id: "00000000-0000-0000-0000-000000000000",
-          side: "request",
           offset: 0,
           length: 32769,
         },
@@ -153,8 +154,11 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — happy-path round-trip", () =
     const bodyBuf = Buffer.from(bodyText, "utf8");
     const hash = createHash("sha256").update(bodyBuf).digest("hex");
 
-    // Object store layout: `<storeRoot>/<kind>/<hash>.json.gz` (gateway
-    // produces the same path; the local driver reads from there).
+    // Object store layout: `<storeRoot>/<kind>/<hash>.json.gz` where
+    // `<storeRoot>` is the value of `RECONDO_OBJECT_STORE_PATH`. The
+    // data layer's `resolveObjectsRoot()` resolves that env var
+    // verbatim (no `/objects` suffix), so this fixture and the
+    // production layout match.
     const storeRoot =
       process.env.RECONDO_OBJECT_STORE_PATH ?? "/tmp/recondo-objects";
     const fixturePath = join(storeRoot, "req", `${hash}.json.gz`);
@@ -179,7 +183,7 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — happy-path round-trip", () =
     // Metadata round-trip.
     const metaResult = await mcp.request<CallToolResult>("tools/call", {
       name: "recondo_get_turn_raw_metadata",
-      arguments: { turn_id: turnId, side: "request" },
+      arguments: { turn_id: turnId },
     });
     expect(metaResult.isError).not.toBe(true);
     const meta = extractEnvelope(metaResult);
@@ -197,7 +201,6 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — happy-path round-trip", () =
       name: "recondo_get_turn_raw_chunk",
       arguments: {
         turn_id: turnId,
-        side: "request",
         offset: 0,
         length: 100,
       },

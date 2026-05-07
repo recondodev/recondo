@@ -284,4 +284,107 @@ describe("D-C3-2 getTurnTool handler — message wrapping", () => {
       getTurnTool.handler({ turn_id: "t-1" } as never, ctx),
     ).rejects.toThrow();
   });
+
+  it("wraps thinkingText in <captured_assistant_thinking> envelope when present", async () => {
+    getTurn.mockResolvedValueOnce({
+      ...baseTurn,
+      userRequestText: null,
+      responseText: null,
+      thinkingText: "let me think step by step...",
+    });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1" } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const wholeJson = JSON.stringify(result);
+    expect(wholeJson).toContain("<captured_assistant_thinking>");
+    expect(wholeJson).toContain("</captured_assistant_thinking>");
+    expect(wholeJson).toContain('"role":"assistant_thinking"');
+    expect(wholeJson).toContain("let me think step by step...");
+  });
+
+  it("does NOT wrap null thinkingText", async () => {
+    getTurn.mockResolvedValueOnce({
+      ...baseTurn,
+      userRequestText: null,
+      responseText: null,
+      thinkingText: null,
+    });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1" } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(JSON.stringify(result)).not.toContain("<captured_assistant_thinking>");
+  });
+});
+
+describe("D-C3-2 getTurnTool handler — fields projection", () => {
+  beforeEach(() => {
+    getTurn.mockReset();
+  });
+
+  it("empty fields array → returns ALL fields (semantically equivalent to fields omitted)", async () => {
+    getTurn.mockResolvedValueOnce({ ...baseTurn });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1", fields: [] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    // All baseTurn keys should still be present.
+    expect(result.id).toBe("turn-1");
+    expect(result.model).toBe("claude-sonnet-4-20250514");
+    expect(result.totalTokens).toBe(150);
+  });
+
+  it("fields=['userRequestText'] → only that key, with the WRAPPED envelope", async () => {
+    getTurn.mockResolvedValueOnce({ ...baseTurn });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1", fields: ["userRequestText"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    // Only the projected key survives.
+    expect(Object.keys(result).sort()).toEqual(["userRequestText"]);
+    // And the value is the WRAPPED envelope (not the raw string).
+    const env = result.userRequestText as Record<string, unknown>;
+    expect(env.role).toBe("user");
+    expect(typeof env.content).toBe("string");
+    expect(env.content as string).toContain("<captured_user_message>");
+  });
+
+  it("fields=['model'] → only `model`, no captured-content wrapping", async () => {
+    getTurn.mockResolvedValueOnce({ ...baseTurn });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1", fields: ["model"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(Object.keys(result).sort()).toEqual(["model"]);
+    expect(result.model).toBe("claude-sonnet-4-20250514");
+  });
+
+  it("non-existent field name is silently ignored (no `undefined` key)", async () => {
+    getTurn.mockResolvedValueOnce({ ...baseTurn });
+    const ctx = makeCtx();
+
+    const result = (await getTurnTool.handler(
+      { turn_id: "turn-1", fields: ["model", "not_a_real_field"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(Object.keys(result).sort()).toEqual(["model"]);
+    expect(Object.prototype.hasOwnProperty.call(result, "not_a_real_field")).toBe(false);
+  });
 });

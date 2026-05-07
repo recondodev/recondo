@@ -41,24 +41,44 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
+/**
+ * One of `dataDir` or `objectsRoot` is required.
+ *
+ *   - `dataDir`     — the gateway-style data dir; the store appends
+ *                     `/objects` to find the kind/hash tree.
+ *   - `objectsRoot` — points DIRECTLY at the objects root that contains
+ *                     `<kind>/<hash>.json.gz` (matches the MCP env var
+ *                     `RECONDO_OBJECT_STORE_PATH`).
+ *
+ * Passing both is allowed; `objectsRoot` wins.
+ */
 export interface LocalObjectStoreOpts {
-  dataDir: string;
+  dataDir?: string;
+  objectsRoot?: string;
 }
 
 export class LocalObjectStore {
-  private readonly dataDir: string;
+  private readonly objectsRoot: string;
 
   constructor(opts: LocalObjectStoreOpts) {
-    if (!opts || typeof opts.dataDir !== "string" || opts.dataDir.length === 0) {
-      throw new Error("LocalObjectStore: dataDir is required");
+    const objectsRoot =
+      typeof opts?.objectsRoot === "string" && opts.objectsRoot.length > 0
+        ? opts.objectsRoot
+        : typeof opts?.dataDir === "string" && opts.dataDir.length > 0
+          ? join(opts.dataDir, "objects")
+          : null;
+    if (objectsRoot === null) {
+      throw new Error(
+        "LocalObjectStore: one of `objectsRoot` or `dataDir` is required",
+      );
     }
-    this.dataDir = opts.dataDir;
+    this.objectsRoot = objectsRoot;
   }
 
   private objectPath(kind: string, hash: string): string {
     validatePathComponent(kind, "kind");
     validatePathComponent(hash, "hash");
-    return join(this.dataDir, "objects", kind, `${hash}.json.gz`);
+    return join(this.objectsRoot, kind, `${hash}.json.gz`);
   }
 
   /**

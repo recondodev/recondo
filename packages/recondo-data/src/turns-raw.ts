@@ -38,10 +38,16 @@
  *     `async` helper.
  *
  *  5. Object-store resolution: both functions construct a
- *     `LocalObjectStore` rooted at `process.env.RECONDO_DATA_DIR`,
- *     falling back to `<home>/.recondo`. v1 only ships the local
- *     driver; if `RECONDO_OBJECTS=s3` is set, an explicit error is
- *     thrown — S3 readRange is not implemented yet.
+ *     `LocalObjectStore` rooted at the directory returned by
+ *     `resolveObjectsRoot()`. Priority:
+ *       (a) `process.env.RECONDO_OBJECT_STORE_PATH` — points DIRECTLY at
+ *           the objects root that contains `<kind>/<hash>.json.gz`
+ *           subdirs (this is the env var the MCP layer surfaces).
+ *       (b) `process.env.RECONDO_DATA_DIR` — gateway-style data dir;
+ *           the helper appends `/objects` to match the on-disk layout.
+ *       (c) `<home>/.recondo/objects` as the last-resort fallback.
+ *     v1 only ships the local driver; if `RECONDO_OBJECTS=s3` is set,
+ *     an explicit error is thrown — S3 readRange is not implemented yet.
  */
 
 import { homedir } from "node:os";
@@ -61,8 +67,20 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function resolveDataDir(): string {
-  return process.env.RECONDO_DATA_DIR ?? join(homedir(), ".recondo");
+/**
+ * Resolve the directory that contains the content-addressable object
+ * store's `<kind>/<hash>.json.gz` tree. Higher-priority overrides win.
+ *
+ *   1. RECONDO_OBJECT_STORE_PATH — points at the objects root directly.
+ *   2. RECONDO_DATA_DIR          — gateway data dir; append `/objects`.
+ *   3. <home>/.recondo/objects   — last-resort fallback.
+ */
+export function resolveObjectsRoot(): string {
+  if (process.env.RECONDO_OBJECT_STORE_PATH) {
+    return process.env.RECONDO_OBJECT_STORE_PATH;
+  }
+  const dataDir = process.env.RECONDO_DATA_DIR ?? join(homedir(), ".recondo");
+  return join(dataDir, "objects");
 }
 
 function ensureLocalDriver(): void {
@@ -169,7 +187,7 @@ export async function getTurnRawMetadata(
   const row = await loadTurnRawRow(turnId, signal);
   const { kind, hash } = refToKindHash(row.req_bytes_ref, row.request_hash);
 
-  const store = new LocalObjectStore({ dataDir: resolveDataDir() });
+  const store = new LocalObjectStore({ objectsRoot: resolveObjectsRoot() });
   const head = await store.readRange(kind, hash, 0, HEAD_SAMPLE_BYTE_CAP, signal);
 
   return {
@@ -231,7 +249,7 @@ async function getTurnRawChunkAsync(
     return { offset, bytes: Buffer.alloc(0), next_offset: null };
   }
 
-  const store = new LocalObjectStore({ dataDir: resolveDataDir() });
+  const store = new LocalObjectStore({ objectsRoot: resolveObjectsRoot() });
   const bytes = await store.readRange(kind, hash, offset, cappedLength, signal);
 
   const endOffset = offset + bytes.length;

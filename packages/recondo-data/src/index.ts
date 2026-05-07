@@ -93,7 +93,7 @@ export type { VerifyIntegrityResult } from "./turns.js";
 
 // Turn raw-body access (C1): metadata + chunked reads against the
 // content-addressable object store.
-export { getTurnRawMetadata, getTurnRawChunk } from "./turns-raw.js";
+export { getTurnRawMetadata, getTurnRawChunk, resolveObjectsRoot } from "./turns-raw.js";
 export type { TurnRawMetadata, TurnRawChunk } from "./turns-raw.js";
 
 // Cross-turn comparison (C2): side-by-side aspect rows for a set of turns.

@@ -185,3 +185,55 @@ describe("D-C3-1 getSessionTool handler", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("D-C3-1 getSessionTool handler — fields projection", () => {
+  beforeEach(() => {
+    getSession.mockReset();
+  });
+
+  const baseSession = {
+    id: "session-1",
+    framework: "claude-code",
+    provider: "anthropic",
+    started_at: "2026-01-01T00:00:00Z",
+    total_tokens: 1234,
+  };
+
+  it("empty fields array → returns ALL fields (semantically equivalent to fields omitted)", async () => {
+    getSession.mockResolvedValueOnce({ ...baseSession });
+    const ctx = makeCtx();
+
+    const result = (await getSessionTool.handler(
+      { session_id: "session-1", fields: [] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(result).toEqual(baseSession);
+  });
+
+  it("fields=['framework'] → only `framework` survives the projection", async () => {
+    getSession.mockResolvedValueOnce({ ...baseSession });
+    const ctx = makeCtx();
+
+    const result = (await getSessionTool.handler(
+      { session_id: "session-1", fields: ["framework"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(Object.keys(result).sort()).toEqual(["framework"]);
+    expect(result.framework).toBe("claude-code");
+  });
+
+  it("non-existent field name is silently ignored (no `undefined` key)", async () => {
+    getSession.mockResolvedValueOnce({ ...baseSession });
+    const ctx = makeCtx();
+
+    const result = (await getSessionTool.handler(
+      { session_id: "session-1", fields: ["framework", "ghost_field"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(Object.keys(result).sort()).toEqual(["framework"]);
+    expect(Object.prototype.hasOwnProperty.call(result, "ghost_field")).toBe(false);
+  });
+});

@@ -1,16 +1,19 @@
 /**
  * D-C3-4 (unit) — `recondo_get_turn_raw_chunk` tool: schema + handler.
  *
- * Contract pinned by C0 audit:
  *   - Tool name: `recondo_get_turn_raw_chunk`.
- *   - Input shape: { turn_id: string (non-empty), side: "request" |
- *     "response", offset: int >= 0, length: int >= 1 AND <= 32_768 }.
- *     The MCP layer caps `length` at 32 KB (32_768) — a Zod max() —
- *     even though the data layer would silently clamp.
+ *   - Input shape: { turn_id: string (non-empty), offset: int >= 0,
+ *     length: int >= 1 AND <= 32_768 }. Request-side only — no `side`
+ *     parameter; response-side raw access is a future tool. The MCP
+ *     layer caps `length` at 32 KB (32_768) — a Zod max() — even
+ *     though the data layer would silently clamp.
  *   - Handler delegates to `getTurnRawChunk(turnId, offset, length,
  *     options)` from `@recondo/data` (turns-raw.ts) and wraps the
  *     returned `Buffer` via `buildRawByteEnvelope` —
- *     `{ role:"raw", from_turn_id, offset, length, content }`.
+ *     `{ role:"raw", from_turn_id, offset, length, next_offset, content }`.
+ *   - `length` in the envelope reflects the ACTUAL bytes returned, not
+ *     the requested length (past-EOF clamp). `next_offset` mirrors the
+ *     data layer (`null` once EOF is reached).
  *   - `ctx.abortSignal` MUST be threaded into
  *     `getTurnRawChunk(turnId, offset, length, { signal: ctx.abortSignal })`.
  *   - Description >= 50 chars.
@@ -69,20 +72,13 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(getTurnRawChunkTool.name).toBe("recondo_get_turn_raw_chunk");
   });
 
-  it("schema requires turn_id, side, offset, length", () => {
+  it("schema requires turn_id, offset, length", () => {
     expect(() => getTurnRawChunkInputSchema.parse({})).toThrow();
     expect(() =>
       getTurnRawChunkInputSchema.parse({ turn_id: "t-1" }),
     ).toThrow();
     expect(() =>
-      getTurnRawChunkInputSchema.parse({ turn_id: "t-1", side: "request" }),
-    ).toThrow();
-    expect(() =>
-      getTurnRawChunkInputSchema.parse({
-        turn_id: "t-1",
-        side: "request",
-        offset: 0,
-      }),
+      getTurnRawChunkInputSchema.parse({ turn_id: "t-1", offset: 0 }),
     ).toThrow();
   });
 
@@ -90,7 +86,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(() =>
       getTurnRawChunkInputSchema.parse({
         turn_id: "",
-        side: "request",
         offset: 0,
         length: 100,
       }),
@@ -100,23 +95,20 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
   it("schema accepts length=1", () => {
     const parsed = getTurnRawChunkInputSchema.parse({
       turn_id: "t-1",
-      side: "request",
       offset: 0,
       length: 1,
     });
     expect(parsed.length).toBe(1);
   });
 
-  it("schema accepts a normal {turn_id, side, offset, length}", () => {
+  it("schema accepts a normal {turn_id, offset, length}", () => {
     const parsed = getTurnRawChunkInputSchema.parse({
       turn_id: "t-1",
-      side: "request",
       offset: 0,
       length: 1000,
     });
     expect(parsed).toMatchObject({
       turn_id: "t-1",
-      side: "request",
       offset: 0,
       length: 1000,
     });
@@ -125,7 +117,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
   it("schema accepts length=32768 (the inclusive cap)", () => {
     const parsed = getTurnRawChunkInputSchema.parse({
       turn_id: "t-1",
-      side: "request",
       offset: 0,
       length: 32768,
     });
@@ -136,7 +127,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(() =>
       getTurnRawChunkInputSchema.parse({
         turn_id: "t-1",
-        side: "request",
         offset: 0,
         length: 32769,
       }),
@@ -147,7 +137,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(() =>
       getTurnRawChunkInputSchema.parse({
         turn_id: "t-1",
-        side: "request",
         offset: 0,
         length: 0,
       }),
@@ -158,7 +147,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(() =>
       getTurnRawChunkInputSchema.parse({
         turn_id: "t-1",
-        side: "request",
         offset: 0,
         length: -1,
       }),
@@ -169,7 +157,6 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
     expect(() =>
       getTurnRawChunkInputSchema.parse({
         turn_id: "t-1",
-        side: "request",
         offset: -1,
         length: 100,
       }),
@@ -179,22 +166,14 @@ describe("D-C3-4 getTurnRawChunkInputSchema", () => {
   it("schema accepts offset=0", () => {
     const parsed = getTurnRawChunkInputSchema.parse({
       turn_id: "t-1",
-      side: "request",
       offset: 0,
       length: 100,
     });
     expect(parsed.offset).toBe(0);
   });
 
-  it("schema rejects side outside the enum", () => {
-    expect(() =>
-      getTurnRawChunkInputSchema.parse({
-        turn_id: "t-1",
-        side: "BOGUS",
-        offset: 0,
-        length: 100,
-      }),
-    ).toThrow();
+  it("description mentions request-side scope (response is a future tool)", () => {
+    expect(getTurnRawChunkTool.description.toLowerCase()).toContain("request");
   });
 });
 
@@ -203,32 +182,53 @@ describe("D-C3-4 getTurnRawChunkTool handler", () => {
     getTurnRawChunk.mockReset();
   });
 
-  it("wraps the returned Buffer via buildRawByteEnvelope (5-key shape)", async () => {
+  it("wraps the returned Buffer via buildRawByteEnvelope (6-key shape with next_offset)", async () => {
     const bytes = Buffer.from("hello-world", "utf8");
     getTurnRawChunk.mockResolvedValueOnce({
       offset: 0,
       bytes,
-      next_offset: null,
+      next_offset: bytes.length, // mid-stream — caller should walk further
     });
     const ctx = makeCtx();
 
     const result = (await getTurnRawChunkTool.handler(
-      { turn_id: "turn-1", side: "request", offset: 0, length: 100 } as never,
+      { turn_id: "turn-1", offset: 0, length: 100 } as never,
       ctx,
     )) as Record<string, unknown>;
 
-    // RawByteEnvelope: { role, from_turn_id, offset, length, content }.
+    // RawByteEnvelope: { role, from_turn_id, offset, length, next_offset, content }.
     expect(result.role).toBe("raw");
     expect(result.from_turn_id).toBe("turn-1");
-    expect(typeof result.offset).toBe("number");
-    expect(typeof result.length).toBe("number");
+    expect(result.offset).toBe(0);
+    // length reflects ACTUAL bytes returned, not the requested 100.
+    expect(result.length).toBe(bytes.length);
+    expect(result.next_offset).toBe(bytes.length);
     expect(typeof result.content).toBe("string");
 
     const content = result.content as string;
     expect(content).toContain("<captured_raw_bytes");
     expect(content).toContain("</captured_raw_bytes>");
-    // Base64 of "hello-world".
     expect(content).toContain(bytes.toString("base64"));
+  });
+
+  it("short read past EOF: envelope.length reflects ACTUAL bytes; next_offset === null", async () => {
+    // Caller asks for 1000 bytes; data layer clamps to the tail (5 bytes).
+    const tail = Buffer.from("abcde", "utf8");
+    getTurnRawChunk.mockResolvedValueOnce({
+      offset: 95,
+      bytes: tail,
+      next_offset: null,
+    });
+    const ctx = makeCtx();
+
+    const result = (await getTurnRawChunkTool.handler(
+      { turn_id: "turn-1", offset: 95, length: 1000 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(result.offset).toBe(95);
+    expect(result.length).toBe(tail.length); // 5, NOT 1000
+    expect(result.next_offset).toBeNull();
   });
 
   it("threads ctx.abortSignal into getTurnRawChunk(..., { signal })", async () => {
@@ -241,7 +241,7 @@ describe("D-C3-4 getTurnRawChunkTool handler", () => {
     const ctx = makeCtx({ abortSignal: ac.signal });
 
     await getTurnRawChunkTool.handler(
-      { turn_id: "t-1", side: "request", offset: 0, length: 100 } as never,
+      { turn_id: "t-1", offset: 0, length: 100 } as never,
       ctx,
     );
 
@@ -262,7 +262,7 @@ describe("D-C3-4 getTurnRawChunkTool handler", () => {
     const ctx = makeCtx();
 
     await getTurnRawChunkTool.handler(
-      { turn_id: "abc-123", side: "response", offset: 100, length: 500 } as never,
+      { turn_id: "abc-123", offset: 100, length: 500 } as never,
       ctx,
     );
 
@@ -282,7 +282,7 @@ describe("D-C3-4 getTurnRawChunkTool handler", () => {
 
     await expect(
       getTurnRawChunkTool.handler(
-        { turn_id: "t-1", side: "request", offset: 0, length: 10 } as never,
+        { turn_id: "t-1", offset: 0, length: 10 } as never,
         ctx,
       ),
     ).rejects.toThrow();
