@@ -105,9 +105,12 @@ export async function verifyIntegrity(
     const respHashPresent = row.response_hash !== null && row.response_hash !== "";
     const reqBytesPresent = row.req_bytes_ref !== null && row.req_bytes_ref !== "";
     const respBytesPresent = row.resp_bytes_ref !== null && row.resp_bytes_ref !== "";
+    // `sequence_num` is BIGINT in Postgres; pg-node returns BIGINT as
+    // a string by default, so coerce explicitly to honour the
+    // `sequenceNum: number` declared shape on `VerifyIntegrityResult`.
     return {
       turnId: row.id as string,
-      sequenceNum: row.sequence_num as number,
+      sequenceNum: Number(row.sequence_num),
       reqHashMatch: reqHashPresent && reqBytesPresent,
       respHashMatch: respHashPresent && respBytesPresent,
       reqBytesPresent,

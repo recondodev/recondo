@@ -22,6 +22,8 @@ import { getSessionTool } from "./tools/get-session.js";
 import { getTurnTool } from "./tools/get-turn.js";
 import { getTurnRawMetadataTool } from "./tools/get-turn-raw-metadata.js";
 import { getTurnRawChunkTool } from "./tools/get-turn-raw-chunk.js";
+import { searchTool } from "./tools/search.js";
+import { verifyIntegrityTool } from "./tools/verify-integrity.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -93,6 +95,16 @@ export async function createMcpServer(
     resolveClientInfo,
   });
   registerReadTool(server, getTurnRawChunkTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, searchTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, verifyIntegrityTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
