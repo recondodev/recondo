@@ -24,6 +24,10 @@ import { getTurnRawMetadataTool } from "./tools/get-turn-raw-metadata.js";
 import { getTurnRawChunkTool } from "./tools/get-turn-raw-chunk.js";
 import { searchTool } from "./tools/search.js";
 import { verifyIntegrityTool } from "./tools/verify-integrity.js";
+import { compareTurnsTool } from "./tools/compare-turns.js";
+import { findSimilarPromptsTool } from "./tools/find-similar-prompts.js";
+import { relatedTurnsTool } from "./tools/related-turns.js";
+import { sessionEfficiencyTool } from "./tools/session-efficiency.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -105,6 +109,29 @@ export async function createMcpServer(
     resolveClientInfo,
   });
   registerReadTool(server, verifyIntegrityTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  // C5 — turn-level analytical tools. Auth context is delivered for
+  // future project scoping; the v1 data-layer helpers are unscoped, so
+  // the handlers ignore `ctx.auth` and call the data layer directly.
+  registerReadTool(server, compareTurnsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, findSimilarPromptsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, relatedTurnsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, sessionEfficiencyTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
