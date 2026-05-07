@@ -28,6 +28,11 @@ import { compareTurnsTool } from "./tools/compare-turns.js";
 import { findSimilarPromptsTool } from "./tools/find-similar-prompts.js";
 import { relatedTurnsTool } from "./tools/related-turns.js";
 import { sessionEfficiencyTool } from "./tools/session-efficiency.js";
+import { realtimeOverviewTool } from "./tools/realtime-overview.js";
+import { realtimeFeedTool } from "./tools/realtime-feed.js";
+import { usageSummaryTool } from "./tools/usage-summary.js";
+import { spendTool } from "./tools/spend.js";
+import { costProjectionsTool } from "./tools/cost-projections.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -132,6 +137,32 @@ export async function createMcpServer(
     resolveClientInfo,
   });
   registerReadTool(server, sessionEfficiencyTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  // C6 — live activity + spend tools.
+  registerReadTool(server, realtimeOverviewTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, realtimeFeedTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, usageSummaryTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, spendTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, costProjectionsTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
