@@ -1,0 +1,22 @@
+{
+  "name": "recondo-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "recondo-mcp": "dist/bin/recondo-mcp.js" },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@recondo/data": "workspace:*",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}

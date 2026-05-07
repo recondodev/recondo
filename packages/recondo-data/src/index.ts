@@ -163,12 +163,15 @@ export type {
 } from "./cost.js";
 
 // Audit trail: list events for GraphQL + bulk fetch for REST exports.
-export { listAuditEvents, getAuditEntries } from "./audit.js";
+// `insertAuditLog` (added for MCP v1, D-C1-8) writes the `audit_log`
+// table used by the recondo-mcp server's per-call audit.
+export { listAuditEvents, getAuditEntries, insertAuditLog } from "./audit.js";
 export type {
   AuditEntry,
   AuditEventsFilter,
   AuditEntriesOpts,
   IntegrityStatusString,
+  InsertAuditLogEntry,
 } from "./audit.js";
 
 // Compliance posture: summary, frameworks, audit log + control mutation.

@@ -74,6 +74,10 @@ default:
     @echo "  just data-test-types  Type-check @recondo/data tests (tsc --noEmit)"
     @echo "  just data-lint-arch   Architecture lint for @recondo/data (no transport imports)"
     @echo ""
+    @echo "MCP Server (recondo-mcp)"
+    @echo "  just mcp-test         Build + run mcp tests (integration needs dev-infra+migrate)"
+    @echo "  just mcp-lint-parity  Catalog parity lint (Phase 1 stub until C11)"
+    @echo ""
     @echo "Workspace Pipeline (pnpm)"
     @echo "  just ws-install       pnpm install (workspace)"
     @echo "  just ws-build         pnpm -r build"
@@ -517,3 +521,15 @@ check-versions:
 # Full TypeScript-side CI (data lint + version check + build + tests + api tests)
 ci-typescript: ws-install data-lint-arch check-versions data-build data-test data-test-types
     cd api && pnpm test
+
+# ---------- MCP Server (recondo-mcp) ----------
+
+# MCP test runner (unit + integration; integration requires `just dev-infra` + `just api-migrate`)
+mcp-test:
+    pnpm --filter recondo-mcp build
+    pnpm --filter recondo-mcp test
+
+# Catalog parity lint (Phase 1 — name parity only; replaced in C11)
+mcp-lint-parity:
+    pnpm --filter recondo-mcp build
+    node mcp/dist/scripts/catalog-parity-lint.js

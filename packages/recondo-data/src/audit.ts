@@ -21,7 +21,87 @@ import { getPool } from "./pool.js";
 import { uniformListEnvelope, decodeSinceCursor } from "./envelope.js";
 import { escapeIlike, formatTimestamp } from "./mappers.js";
 import { resolveDateRange } from "./cost.js";
-import type { ApiKeyInfo, ListEnvelope, ListOptions, SinceCursor } from "./types.js";
+import type {
+  ApiKeyInfo,
+  ListEnvelope,
+  ListOptions,
+  QueryOptions,
+  SinceCursor,
+} from "./types.js";
+
+/**
+ * MCP per-call audit log entry.
+ *
+ * Written by the recondo-mcp server (mcp/src/audit/writer.ts) on every
+ * tool call. Persists to the `audit_log` table created in migration
+ * 013_mcp-audit-log.sql.
+ *
+ * `arguments` is passed straight to the JSONB column — node-postgres
+ * serialises any JS value into JSONB when the column type is JSONB.
+ * `requested_at` is optional; when omitted, the DB DEFAULT now() fires
+ * server-side (and the column is excluded from the INSERT statement).
+ */
+export interface InsertAuditLogEntry {
+  toolName: string;
+  arguments: unknown;
+  responseBytes: number;
+  clientName?: string | null;
+  keyId?: string | null;
+  requestedAt?: Date;
+}
+
+/**
+ * Insert one row into the `audit_log` table (MCP per-call audit).
+ *
+ * Errors propagate; the MCP audit writer is the layer that swallows.
+ *
+ * AbortSignal contract: an already-aborted signal throws AbortError
+ * BEFORE issuing any SQL — mirrors the convention used by
+ * `authenticateApiKey` and the AsyncIterable list functions.
+ */
+export async function insertAuditLog(
+  entry: InsertAuditLogEntry,
+  options: QueryOptions = {},
+): Promise<void> {
+  if (options.signal?.aborted) {
+    throw new DOMException("aborted", "AbortError");
+  }
+
+  const pool = getPool();
+  const args = entry.arguments ?? {};
+  const clientName = entry.clientName ?? null;
+  const keyId = entry.keyId ?? null;
+
+  if (entry.requestedAt !== undefined) {
+    await pool.query(
+      `INSERT INTO audit_log
+         (tool_name, arguments, response_bytes, client_name, key_id, requested_at)
+       VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
+      [
+        entry.toolName,
+        JSON.stringify(args),
+        entry.responseBytes,
+        clientName,
+        keyId,
+        entry.requestedAt,
+      ],
+    );
+  } else {
+    // Omit requested_at so the DB DEFAULT now() fires.
+    await pool.query(
+      `INSERT INTO audit_log
+         (tool_name, arguments, response_bytes, client_name, key_id)
+       VALUES ($1, $2::jsonb, $3, $4, $5)`,
+      [
+        entry.toolName,
+        JSON.stringify(args),
+        entry.responseBytes,
+        clientName,
+        keyId,
+      ],
+    );
+  }
+}
 
 export type IntegrityStatusString = "verified" | "partial" | "retry" | "failed";
 
