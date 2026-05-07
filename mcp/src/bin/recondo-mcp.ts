@@ -44,7 +44,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const server = createMcpServer({ env, flags });
+  let server;
+  try {
+    server = await createMcpServer({ env, flags });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ error: msg }, "failed to create mcp server");
+    process.exit(1);
+  }
   try {
     await connectStdio(server);
   } catch (err) {

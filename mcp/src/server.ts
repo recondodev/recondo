@@ -2,29 +2,45 @@
  * Recondo MCP server bootstrap.
  *
  * Wires `McpServer` from `@modelcontextprotocol/sdk` with a stdio
- * transport. C1 advertises the empty capability sets for tools,
- * prompts, and resources — subsequent chunks register tools.
+ * transport, resolves the API key (or dev-bypass) into an
+ * `AuthContext`, and registers the canonical read tools through the
+ * `registerReadTool` helper. Subsequent chunks (C3..C9) extend the
+ * tool list by appending more `registerReadTool` calls here.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { resolveApiKey, type AuthContext } from "./auth/context.js";
+import { writeAuditEntry } from "./audit/writer.js";
 import type { EnvConfig } from "./config/env.js";
 import type { ParsedFlags } from "./config/flags.js";
+import { registerReadTool } from "./registry/register.js";
+import type { AuditWriter, ClientInfo } from "./registry/types.js";
+import { listSessionsTool } from "./tools/list-sessions.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
   flags: ParsedFlags;
+  /** Optional auth override — used by tests that pre-resolve auth. */
+  auth?: AuthContext;
 }
 
 const SERVER_NAME = "recondo-mcp";
 const SERVER_VERSION = "0.1.0";
 
-export function createMcpServer(_args: CreateMcpServerArgs): McpServer {
+const auditWriter: AuditWriter = {
+  write: writeAuditEntry,
+};
+
+export async function createMcpServer(
+  args: CreateMcpServerArgs,
+): Promise<McpServer> {
   // Capabilities for tools/prompts/resources are advertised explicitly
-  // so the `initialize` handshake reports the categories even when no
-  // entries are registered yet (C1 ships an empty server; C2+ register
-  // tools incrementally).
+  // so the `initialize` handshake reports the categories. The SDK
+  // wires up the `tools/list` request handler lazily on the first
+  // `registerTool` call below, so we MUST register at least one tool
+  // before the transport accepts traffic.
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
@@ -35,6 +51,28 @@ export function createMcpServer(_args: CreateMcpServerArgs): McpServer {
       },
     },
   );
+
+  const auth =
+    args.auth ??
+    (await resolveApiKey({
+      devBypass: args.env.devBypass,
+      apiKey: args.env.apiKey,
+    }));
+
+  const resolveClientInfo = (): ClientInfo | undefined => {
+    const info = server.server.getClientVersion();
+    if (!info) return undefined;
+    const out: ClientInfo = {};
+    if (info.name !== undefined) out.name = info.name;
+    if (info.version !== undefined) out.version = info.version;
+    return out;
+  };
+
+  registerReadTool(server, listSessionsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
 
   return server;
 }

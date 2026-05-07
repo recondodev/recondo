@@ -6,6 +6,7 @@
  * returns, with the serialised response byte count.
  */
 
+import type { z } from "zod";
 import type { AuthContext } from "../auth/context.js";
 
 export interface ClientInfo {
@@ -21,22 +22,42 @@ export interface AuditWriteEntry {
   keyId?: string | null;
 }
 
+export interface AuditWriteOptions {
+  signal?: AbortSignal;
+}
+
+export interface AuditWriter {
+  write(entry: AuditWriteEntry, options?: AuditWriteOptions): Promise<void>;
+}
+
 export interface ToolContext {
   abortSignal: AbortSignal;
   auth: AuthContext;
   clientInfo?: ClientInfo;
-  audit: {
-    write(entry: AuditWriteEntry): Promise<void>;
-  };
+  audit: AuditWriter;
 }
 
 /**
  * Read-only tool. Never mutates captured tables.
+ *
+ * `inputShape` is a Zod raw shape (key -> ZodType) handed to the SDK's
+ * `registerTool` so the SDK can wrap it in `z.object()` internally and
+ * derive the JSON-Schema for `tools/list`. `inputSchema` is the same
+ * shape pre-wrapped so unit tests can call `.parse()` directly without
+ * booting the SDK.
  */
 export interface ReadTool<Input = unknown, Output = unknown> {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  inputShape: z.ZodRawShape;
+  /**
+   * The same shape pre-wrapped via `z.object(inputShape)` for unit
+   * tests that want to call `.parse()` directly. Typed loosely as
+   * `z.ZodTypeAny` because Zod's `default()` makes the input vs output
+   * types diverge (e.g. `limit?: number` on input → `limit: number`
+   * on output) and the generic interface can't carry both.
+   */
+  inputSchema: z.ZodTypeAny;
   handler: (input: Input, ctx: ToolContext) => Promise<Output>;
 }
 
@@ -47,7 +68,8 @@ export interface ReadTool<Input = unknown, Output = unknown> {
 export interface ActionTool<Input = unknown, Output = unknown> {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  inputShape: z.ZodRawShape;
+  inputSchema: z.ZodTypeAny;
   destructive: boolean;
   handler: (input: Input, ctx: ToolContext) => Promise<Output>;
 }
