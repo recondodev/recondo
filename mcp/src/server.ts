@@ -33,6 +33,10 @@ import { realtimeFeedTool } from "./tools/realtime-feed.js";
 import { usageSummaryTool } from "./tools/usage-summary.js";
 import { spendTool } from "./tools/spend.js";
 import { costProjectionsTool } from "./tools/cost-projections.js";
+import { agentSummaryTool } from "./tools/agent-summary.js";
+import { agentFrameworkDistributionTool } from "./tools/agent-framework-distribution.js";
+import { topTool } from "./tools/top.js";
+import { toolCallStatsTool } from "./tools/tool-call-stats.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -163,6 +167,27 @@ export async function createMcpServer(
     resolveClientInfo,
   });
   registerReadTool(server, costProjectionsTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  // C7 — agent analytics tools.
+  registerReadTool(server, agentSummaryTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, agentFrameworkDistributionTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, topTool, {
+    auth,
+    audit: auditWriter,
+    resolveClientInfo,
+  });
+  registerReadTool(server, toolCallStatsTool, {
     auth,
     audit: auditWriter,
     resolveClientInfo,
