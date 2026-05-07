@@ -155,6 +155,45 @@ describe("D-C2-3 listSessionsTool handler — AbortSignal threading", () => {
     ).rejects.toThrow();
   });
 
+  it("forwards `since` to listSessions as filter.startedAfter", async () => {
+    listSessions.mockResolvedValueOnce({
+      items: [],
+      next_offset: null,
+      truncated: false,
+      stream_id: null,
+      is_final: true,
+      total: 0,
+    });
+    const ctx = makeCtx();
+    await listSessionsTool.handler(
+      { limit: 5, since: "2026-01-01T00:00:00Z" } as never,
+      ctx,
+    );
+
+    expect(listSessions).toHaveBeenCalledTimes(1);
+    const callArgs = listSessions.mock.calls[0];
+    // listSessions(apiKey, filter, options) — filter is positional[1].
+    const filter = callArgs[1];
+    expect(filter).toBeDefined();
+    expect(filter.startedAfter).toBe("2026-01-01T00:00:00Z");
+  });
+
+  it("omits filter.startedAfter when `since` is not supplied", async () => {
+    listSessions.mockResolvedValueOnce({
+      items: [],
+      next_offset: null,
+      truncated: false,
+      stream_id: null,
+      is_final: true,
+      total: 0,
+    });
+    const ctx = makeCtx();
+    await listSessionsTool.handler({ limit: 5 } as never, ctx);
+
+    const filter = listSessions.mock.calls[0][1];
+    expect(filter.startedAfter).toBeUndefined();
+  });
+
   it("returns the canonical 5-key envelope shape", async () => {
     listSessions.mockResolvedValueOnce({
       items: [{ id: "session-1" }],

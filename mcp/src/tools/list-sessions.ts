@@ -32,9 +32,31 @@ import { enforceListBudget } from "../envelope/truncate.js";
 import type { AuthContext } from "../auth/context.js";
 import type { ReadTool } from "../registry/types.js";
 
+/**
+ * Subset of `SessionFilter` (see `packages/recondo-data/src/sessions.ts`)
+ * intentionally exposed by `recondo_list_sessions`. Fields NOT on the
+ * MCP surface and where they live instead:
+ *
+ *   - `search`          → exposed via the dedicated `recondo_search`
+ *                         tool in C4 so full-text scoring stays a
+ *                         first-class concern.
+ *   - `hideNonLlm`      → server-side default (`true`); sessions with
+ *                         no LLM call are governance noise.
+ *   - `startedBefore`   → not yet plumbed; will land alongside the
+ *                         time-range filters in C4.
+ *
+ * `since` is wired below to `filter.startedAfter` for cursor-style
+ * pagination ("give me sessions newer than this ISO-8601 timestamp").
+ */
 const inputShape = {
   limit: z.number().int().min(1).max(100).default(20),
   offset: z.number().int().min(0).optional(),
+  /**
+   * ISO-8601 timestamp (e.g. `2026-01-01T00:00:00Z`). Forwarded as
+   * `filter.startedAfter` to the data layer — `s.started_at >= since`.
+   * Useful for incremental polling: pass the largest `started_at` you
+   * have seen and you'll get only newer sessions.
+   */
   since: z.string().optional(),
   framework: z.string().optional(),
   provider: z.string().optional(),
@@ -51,7 +73,9 @@ const DESCRIPTION =
   "provider, model, status, and project. Returns a paginated envelope of " +
   "session summaries (id, framework, started_at, total_tokens, etc.). Use " +
   "`offset` for absolute pagination; the response includes `next_offset` and " +
-  "`truncated:true` when results were capped by the 32 KB response budget.";
+  "`truncated:true` when results were capped by the 32 KB response budget. " +
+  "Pass `since` (ISO-8601) to fetch only sessions started after that " +
+  "timestamp — useful for incremental polling.";
 
 /**
  * Map the recondo-mcp `AuthContext` onto the data layer's `ApiKeyInfo`
@@ -81,12 +105,13 @@ export const listSessionsTool: ReadTool<ListSessionsInput, unknown> = {
     if (input.model !== undefined) filter.model = input.model;
     if (input.status !== undefined) filter.status = input.status;
     if (input.project_id !== undefined) filter.projectId = input.project_id;
+    // `since` (ISO-8601) → `filter.startedAfter` — the data layer
+    // already accepts this field and binds it as `::timestamptz` so
+    // we forward the raw string.
+    if (input.since !== undefined) filter.startedAfter = input.since;
 
     const apiKey = authContextToApiKey(ctx.auth);
 
-    // Note: `since` is reserved (Plan B parity) but the data-layer
-    // signature does not yet plumb a since-cursor for sessions, so
-    // we accept and ignore it for forward compatibility.
     const envelope = await listSessions(apiKey, filter, {
       limit,
       offset,

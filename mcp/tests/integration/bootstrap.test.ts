@@ -11,8 +11,13 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// ESM equivalent of CommonJS `__dirname`. The mcp package is
+// `"type": "module"`, so the legacy global is undefined at runtime.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const BINARY = resolve(__dirname, "../../dist/bin/recondo-mcp.js");
 const HAVE_DB = Boolean(process.env.DATABASE_URL);

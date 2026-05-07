@@ -12,9 +12,15 @@
  * build never silently passes.
  */
 import { spawn, type ChildProcessByStdio } from "node:child_process";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Readable, Writable } from "node:stream";
+
+// ESM equivalent of CommonJS `__dirname`. The helper lives in an ESM
+// package (`"type": "module"`) so the legacy global is undefined at
+// runtime — derive it from `import.meta.url` instead.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const RECONDO_MCP_BINARY = resolve(
   __dirname,

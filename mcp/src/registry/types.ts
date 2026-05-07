@@ -51,13 +51,20 @@ export interface ReadTool<Input = unknown, Output = unknown> {
   description: string;
   inputShape: z.ZodRawShape;
   /**
-   * The same shape pre-wrapped via `z.object(inputShape)` for unit
-   * tests that want to call `.parse()` directly. Typed loosely as
-   * `z.ZodTypeAny` because Zod's `default()` makes the input vs output
-   * types diverge (e.g. `limit?: number` on input → `limit: number`
-   * on output) and the generic interface can't carry both.
+   * Pre-wrapped `z.object(inputShape)` for unit tests that want to call
+   * `.parse()` directly. Typed as `SomeZodObject` (the canonical Zod
+   * 3.x alias for `ZodObject<ZodRawShape, UnknownKeysParam,
+   * ZodTypeAny>`) so the constraint "MUST be a ZodObject" is enforced
+   * by the type system. The MCP SDK rejects non-object input schemas
+   * at runtime; the type alias surfaces that contract at compile time.
+   *
+   * NOTE: Zod's `.default()` makes input vs output types diverge
+   * (e.g. `limit?: number` on input → `limit: number` on output);
+   * `SomeZodObject` is intentionally generic over both directions so
+   * tools can keep using `.default(...)` without specialising this
+   * field.
    */
-  inputSchema: z.ZodTypeAny;
+  inputSchema: z.SomeZodObject;
   handler: (input: Input, ctx: ToolContext) => Promise<Output>;
 }
 
@@ -69,7 +76,8 @@ export interface ActionTool<Input = unknown, Output = unknown> {
   name: string;
   description: string;
   inputShape: z.ZodRawShape;
-  inputSchema: z.ZodTypeAny;
+  /** See {@link ReadTool.inputSchema} — same constraint. */
+  inputSchema: z.SomeZodObject;
   destructive: boolean;
   handler: (input: Input, ctx: ToolContext) => Promise<Output>;
 }

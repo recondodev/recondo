@@ -100,9 +100,29 @@ describeIfReady("D-C2-3 recondo_list_sessions schema discovery", () => {
     }
     expect(props.offset).toBeDefined();
     expect(props.since).toBeDefined();
+    // `since` must be a string (ISO-8601 timestamp).
+    expect(props.since?.type).toBe("string");
     // Filter surface — at minimum framework should be exposed since
     // the data layer accepts it.
     expect(props.framework).toBeDefined();
+  });
+
+  it("accepts ISO-8601 string for `since` and forwards it to listSessions", async () => {
+    // This proves `since` is wired all the way through to the data
+    // layer — the call MUST NOT error and MUST return a valid envelope.
+    // (Functional `startedAfter` filtering is asserted in the data
+    // layer's own test suite — recondo-data sessions.test.ts.)
+    const result = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_list_sessions",
+      arguments: { limit: 5, since: "2030-01-01T00:00:00Z" },
+    });
+    expect(result.isError).not.toBe(true);
+    const env = extractEnvelope(result);
+    // Far-future cutoff → empty page, but the envelope shape is intact.
+    expect(env).toHaveProperty("items");
+    expect(Array.isArray(env.items)).toBe(true);
+    expect((env.items as unknown[]).length).toBe(0);
+    expect(env.is_final).toBe(true);
   });
 });
 
