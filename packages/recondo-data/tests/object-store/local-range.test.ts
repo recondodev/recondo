@@ -13,7 +13,7 @@
  * API shape under test (must be exported from `@recondo/data`):
  *
  *   class LocalObjectStore {
- *     constructor(opts: { dataDir: string });
+ *     constructor(opts: { objectsRoot: string });
  *     readRange(
  *       kind: string,
  *       hash: string,
@@ -69,7 +69,7 @@ describe("LocalObjectStore.readRange — D-OS1 happy-path slicing", () => {
       "utf8",
     );
     const hash = seedObject("req", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     // Read 12 bytes starting at offset 1: '"hello":"wor'
     // (plaintext[0]='{', plaintext[1]='"', so subarray(1, 13) === '"hello":"wor'.)
@@ -83,7 +83,7 @@ describe("LocalObjectStore.readRange — D-OS1 happy-path slicing", () => {
   it("returns the full object when offset=0, length=bytes_total", async () => {
     const plaintext = Buffer.from("the quick brown fox jumps over the lazy dog", "utf8");
     const hash = seedObject("req", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     const slice = await store.readRange("req", hash, 0, plaintext.length);
     expect(slice.equals(plaintext)).toBe(true);
@@ -92,7 +92,7 @@ describe("LocalObjectStore.readRange — D-OS1 happy-path slicing", () => {
   it("works for kind='resp' too (kind is a real path component, not hardcoded)", async () => {
     const plaintext = Buffer.from('{"choices":[{"index":0}]}', "utf8");
     const hash = seedObject("resp", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     const slice = await store.readRange("resp", hash, 0, 5);
     expect(slice.length).toBe(5);
@@ -104,7 +104,7 @@ describe("LocalObjectStore.readRange — D-OS2 clamps past EOF", () => {
   it("returns the tail when offset + length > bytes_total", async () => {
     const plaintext = Buffer.from("0123456789", "utf8");
     const hash = seedObject("req", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     // Ask for 100 bytes starting at offset 7. Object is 10 bytes total.
     const slice = await store.readRange("req", hash, 7, 100);
@@ -115,7 +115,7 @@ describe("LocalObjectStore.readRange — D-OS2 clamps past EOF", () => {
   it("returns an empty Buffer when offset === bytes_total", async () => {
     const plaintext = Buffer.from("0123456789", "utf8");
     const hash = seedObject("req", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     const slice = await store.readRange("req", hash, 10, 50);
     expect(Buffer.isBuffer(slice)).toBe(true);
@@ -130,7 +130,7 @@ describe("LocalObjectStore.readRange — D-OS3 pre-aborted signal", () => {
     // implementation forgets to short-circuit on abort and proceeds to
     // touch the filesystem, fs.readFile/fs.open will reject with an
     // ENOENT error — a different error.name and a clear failure.
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
     const bogusHash = "0".repeat(64); // valid hex, but no file written
 
     const ctrl = new AbortController();
@@ -154,7 +154,7 @@ describe("LocalObjectStore.readRange — D-OS3 pre-aborted signal", () => {
     // file first and only then checking the signal.
     const plaintext = Buffer.from("never-read", "utf8");
     const hash = seedObject("req", plaintext);
-    const store = new LocalObjectStore({ dataDir });
+    const store = new LocalObjectStore({ objectsRoot: join(dataDir, "objects") });
 
     const ctrl = new AbortController();
     ctrl.abort();

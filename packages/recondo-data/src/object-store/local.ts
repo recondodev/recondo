@@ -2,7 +2,7 @@
  * Local filesystem ObjectStore — TypeScript port of the Rust gateway's
  * `gateway/src/storage/object.rs::LocalObjectStore`.
  *
- * Layout: `<dataDir>/objects/<kind>/<hash>.json.gz` — gzipped,
+ * Layout: `<objectsRoot>/<kind>/<hash>.json.gz` — gzipped,
  * content-addressable. The on-disk format mirrors the gateway's
  * canonical store so the same data dir is interchangeable.
  *
@@ -42,37 +42,26 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 /**
- * One of `dataDir` or `objectsRoot` is required.
- *
- *   - `dataDir`     — the gateway-style data dir; the store appends
- *                     `/objects` to find the kind/hash tree.
- *   - `objectsRoot` — points DIRECTLY at the objects root that contains
- *                     `<kind>/<hash>.json.gz` (matches the MCP env var
- *                     `RECONDO_OBJECT_STORE_PATH`).
- *
- * Passing both is allowed; `objectsRoot` wins.
+ * `objectsRoot` points DIRECTLY at the objects root that contains
+ * `<kind>/<hash>.json.gz` (matches the MCP env var
+ * `RECONDO_OBJECT_STORE_PATH`). Callers using a gateway-style data dir
+ * must pass `join(dataDir, "objects")`.
  */
 export interface LocalObjectStoreOpts {
-  dataDir?: string;
-  objectsRoot?: string;
+  objectsRoot: string;
 }
 
 export class LocalObjectStore {
   private readonly objectsRoot: string;
 
   constructor(opts: LocalObjectStoreOpts) {
-    const objectsRoot =
-      typeof opts?.objectsRoot === "string" && opts.objectsRoot.length > 0
-        ? opts.objectsRoot
-        : typeof opts?.dataDir === "string" && opts.dataDir.length > 0
-          ? join(opts.dataDir, "objects")
-          : null;
-    if (objectsRoot === null) {
-      throw new Error(
-        "LocalObjectStore: one of `objectsRoot` or `dataDir` is required",
-      );
+    if (
+      typeof opts?.objectsRoot !== "string" ||
+      opts.objectsRoot.length === 0
+    ) {
+      throw new Error("LocalObjectStore: `objectsRoot` is required");
     }
-    this.objectsRoot = objectsRoot;
+    this.objectsRoot = opts.objectsRoot;
   }
 
   private objectPath(kind: string, hash: string): string {

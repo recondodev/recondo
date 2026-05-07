@@ -63,7 +63,7 @@ describe("C7 D-EX2 — LocalObjectStore class instantiable + readRange method", 
   it("constructs an instance with a tmpdir and exposes `readRange` as a function", () => {
     const dir = mkdtempSync(join(tmpdir(), "recondo-data-c7-ex2-"));
     try {
-      const store = new data.LocalObjectStore({ dataDir: dir });
+      const store = new data.LocalObjectStore({ objectsRoot: join(dir, "objects") });
       expect(store).toBeInstanceOf(data.LocalObjectStore);
       expect(typeof store.readRange).toBe("function");
     } finally {
