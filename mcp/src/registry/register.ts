@@ -15,9 +15,9 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { withAuditLog } from "./audit-wrap.js";
+import { withAuditLog, withActionAuditLog } from "./audit-wrap.js";
 import { buildToolContext, type SdkExtra, type ToolContextFactoryArgs } from "./context.js";
-import type { ReadTool } from "./types.js";
+import type { ActionTool, ReadTool } from "./types.js";
 
 export function registerReadTool<TInput, TOutput>(
   server: McpServer,
@@ -41,6 +41,40 @@ export function registerReadTool<TInput, TOutput>(
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: (envelope as Record<string, unknown> | null) ?? undefined,
+      };
+    },
+  );
+}
+
+/**
+ * Canonical "register an action tool" helper (D-C10).
+ *
+ * Mirrors `registerReadTool`: builds the per-call `ToolContext`, runs
+ * the audit wrap (so the `arguments` field captures what was attempted
+ * and `responseBytes` reflects the realised payload), and folds the
+ * data-layer return value into the SDK `CallToolResult` shape.
+ */
+export function registerActionTool<TInput, TOutput>(
+  server: McpServer,
+  tool: ActionTool<TInput, TOutput>,
+  factoryArgs: ToolContextFactoryArgs,
+): void {
+  const wrapped = withActionAuditLog(tool);
+
+  server.registerTool(
+    tool.name,
+    {
+      description: tool.description,
+      inputSchema: tool.inputShape,
+    },
+    async (args: unknown, extra: SdkExtra) => {
+      const ctx = buildToolContext(factoryArgs, extra);
+      const result = await wrapped(args as TInput, ctx);
+      const text = JSON.stringify(result ?? null);
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent:
+          (result as Record<string, unknown> | null) ?? undefined,
       };
     },
   );

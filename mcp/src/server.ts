@@ -17,8 +17,9 @@ import { resolveApiKey, type AuthContext } from "./auth/context.js";
 import { writeAuditEntry } from "./audit/writer.js";
 import type { EnvConfig } from "./config/env.js";
 import type { ParsedFlags } from "./config/flags.js";
-import { registerReadTool } from "./registry/register.js";
+import { registerActionTool, registerReadTool } from "./registry/register.js";
 import type {
+  ActionTool,
   AuditWriter,
   ClientInfo,
   ReadTool,
@@ -50,6 +51,14 @@ import { reportsTool } from "./tools/reports.js";
 import { reportTrendsTool } from "./tools/report-trends.js";
 import { policiesTool } from "./tools/policies.js";
 import { registeredKeysTool } from "./tools/registered-keys.js";
+// C10 — action tools.
+import { generateReportTool } from "./tools/generate-report.js";
+import { updateControlStatusTool } from "./tools/update-control-status.js";
+import { createPolicyTool } from "./tools/create-policy.js";
+import { updatePolicyTool } from "./tools/update-policy.js";
+import { registerKeyTool } from "./tools/register-key.js";
+import { deletePolicyTool } from "./tools/delete-policy.js";
+import { deleteKeyTool } from "./tools/delete-key.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -119,6 +128,28 @@ export const READ_TOOLS: ReadTool<any, any>[] = [
   registeredKeysTool,
 ];
 
+/**
+ * Single source of truth for the v1 action-tool catalog (D-C10).
+ *
+ * 7 tools:
+ *   - 5 non-destructive: generate_report, update_control_status,
+ *     create_policy, update_policy, register_key
+ *   - 2 destructive: delete_policy, delete_key
+ *
+ * Gated behind `--allow-actions` (non-destructive) and
+ * `--allow-actions --allow-destructive` (destructive). See
+ * `createMcpServer` for the registration logic.
+ */
+export const ACTION_TOOLS: ActionTool<any, any>[] = [
+  generateReportTool,
+  updateControlStatusTool,
+  createPolicyTool,
+  updatePolicyTool,
+  registerKeyTool,
+  deletePolicyTool,
+  deleteKeyTool,
+];
+
 export async function createMcpServer(
   args: CreateMcpServerArgs,
 ): Promise<McpServer> {
@@ -160,6 +191,21 @@ export async function createMcpServer(
       audit: auditWriter,
       resolveClientInfo,
     });
+  }
+
+  // D-C10 — action-tool gating. Always-off by default; `--allow-actions`
+  // unlocks the 5 non-destructive tools; `--allow-destructive` (which
+  // parseFlags rejects without `--allow-actions`) additionally unlocks
+  // the 2 destructive tools.
+  if (args.flags.allowActions) {
+    for (const tool of ACTION_TOOLS) {
+      if (tool.destructive && !args.flags.allowDestructive) continue;
+      registerActionTool(server, tool, {
+        auth,
+        audit: auditWriter,
+        resolveClientInfo,
+      });
+    }
   }
 
   return server;
