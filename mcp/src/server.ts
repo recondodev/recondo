@@ -4,8 +4,10 @@
  * Wires `McpServer` from `@modelcontextprotocol/sdk` with a stdio
  * transport, resolves the API key (or dev-bypass) into an
  * `AuthContext`, and registers the canonical read tools through the
- * `registerReadTool` helper. Subsequent chunks (C3..C9) extend the
- * tool list by appending more `registerReadTool` calls here.
+ * `registerReadTool` helper. The `READ_TOOLS` array is the SINGLE
+ * source of truth for the v1 read-tool catalog (27 entries after C9 —
+ * insights dropped per C0). Any new read tool MUST be appended here so
+ * the catalog count + parity lints stay accurate.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -16,7 +18,11 @@ import { writeAuditEntry } from "./audit/writer.js";
 import type { EnvConfig } from "./config/env.js";
 import type { ParsedFlags } from "./config/flags.js";
 import { registerReadTool } from "./registry/register.js";
-import type { AuditWriter, ClientInfo } from "./registry/types.js";
+import type {
+  AuditWriter,
+  ClientInfo,
+  ReadTool,
+} from "./registry/types.js";
 import { listSessionsTool } from "./tools/list-sessions.js";
 import { getSessionTool } from "./tools/get-session.js";
 import { getTurnTool } from "./tools/get-turn.js";
@@ -42,6 +48,8 @@ import { anomaliesTool } from "./tools/anomalies.js";
 import { complianceTool } from "./tools/compliance.js";
 import { reportsTool } from "./tools/reports.js";
 import { reportTrendsTool } from "./tools/report-trends.js";
+import { policiesTool } from "./tools/policies.js";
+import { registeredKeysTool } from "./tools/registered-keys.js";
 
 export interface CreateMcpServerArgs {
   env: EnvConfig;
@@ -56,6 +64,60 @@ const SERVER_VERSION = "0.1.0";
 const auditWriter: AuditWriter = {
   write: writeAuditEntry,
 };
+
+/**
+ * Single source of truth for the v1 read-tool catalog.
+ *
+ * 27 tools after C9:
+ *   - 7 from C2 (list_sessions, get_session, get_turn, get_turn_raw_metadata,
+ *     get_turn_raw_chunk, search, verify_integrity)
+ *   - 4 from C5 (compare_turns, find_similar_prompts, related_turns,
+ *     session_efficiency)
+ *   - 5 from C6 (realtime_overview, realtime_feed, usage_summary, spend,
+ *     cost_projections)
+ *   - 4 from C7 (agent_summary, agent_framework_distribution, top,
+ *     tool_call_stats)
+ *   - 5 from C8 (audit_trail, anomalies, compliance, reports,
+ *     report_trends — `insights` dropped per C0 §5 #1)
+ *   - 2 from C9 (policies, registered_keys)
+ */
+export const READ_TOOLS: ReadTool<any, any>[] = [
+  // C2 — bootstrap read tools.
+  listSessionsTool,
+  getSessionTool,
+  getTurnTool,
+  getTurnRawMetadataTool,
+  getTurnRawChunkTool,
+  searchTool,
+  verifyIntegrityTool,
+  // C5 — turn-level analytical tools.
+  compareTurnsTool,
+  findSimilarPromptsTool,
+  relatedTurnsTool,
+  sessionEfficiencyTool,
+  // C6 — live activity + spend tools.
+  realtimeOverviewTool,
+  realtimeFeedTool,
+  usageSummaryTool,
+  spendTool,
+  costProjectionsTool,
+  // C7 — agent analytics tools.
+  agentSummaryTool,
+  agentFrameworkDistributionTool,
+  topTool,
+  toolCallStatsTool,
+  // C8 — audit / anomaly / compliance / reports tools (5 total).
+  // NOTE: the `insights` tool is intentionally NOT registered (C0 §5 #1
+  // dropped it — no matching `data.insights` resolver exists).
+  auditTrailTool,
+  anomaliesTool,
+  complianceTool,
+  reportsTool,
+  reportTrendsTool,
+  // C9 — policy + key reads.
+  policiesTool,
+  registeredKeysTool,
+];
 
 export async function createMcpServer(
   args: CreateMcpServerArgs,
@@ -92,139 +154,13 @@ export async function createMcpServer(
     return out;
   };
 
-  registerReadTool(server, listSessionsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, getSessionTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, getTurnTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, getTurnRawMetadataTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, getTurnRawChunkTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, searchTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, verifyIntegrityTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  // C5 — turn-level analytical tools. Auth context is delivered for
-  // future project scoping; the v1 data-layer helpers are unscoped, so
-  // the handlers ignore `ctx.auth` and call the data layer directly.
-  registerReadTool(server, compareTurnsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, findSimilarPromptsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, relatedTurnsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, sessionEfficiencyTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  // C6 — live activity + spend tools.
-  registerReadTool(server, realtimeOverviewTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, realtimeFeedTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, usageSummaryTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, spendTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, costProjectionsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  // C7 — agent analytics tools.
-  registerReadTool(server, agentSummaryTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, agentFrameworkDistributionTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, topTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, toolCallStatsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  // C8 — audit / anomaly / compliance / reports tools (5 total).
-  // NOTE: the `insights` tool is intentionally NOT registered (C0 §5 #1
-  // dropped it — no matching `data.insights` resolver exists).
-  registerReadTool(server, auditTrailTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, anomaliesTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, complianceTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, reportsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
-  registerReadTool(server, reportTrendsTool, {
-    auth,
-    audit: auditWriter,
-    resolveClientInfo,
-  });
+  for (const tool of READ_TOOLS) {
+    registerReadTool(server, tool, {
+      auth,
+      audit: auditWriter,
+      resolveClientInfo,
+    });
+  }
 
   return server;
 }
