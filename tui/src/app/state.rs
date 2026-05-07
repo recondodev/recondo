@@ -167,6 +167,11 @@ impl AppState {
                     if let Some(id) = prior_selected_id {
                         sd.set_selected_to_id(&id);
                     }
+                } else if let Some(turn_id) = self.selection.turn() {
+                    // Fresh SessionDetail load — honor a deep-link turn id
+                    // staged by the caller (e.g. realtime feed drill). Falls
+                    // back to selected=0 if the id isn't in the turn list.
+                    sd.set_selected_to_id(turn_id);
                 }
                 self.session_detail = Some(sd);
             }
@@ -541,6 +546,21 @@ impl AppState {
             Lens::Cost => {
                 drill_target(&self.cost, &mut self.selection);
                 self.history.push(Lens::Sessions);
+            }
+            Lens::Realtime => {
+                // Deep-link from a feed row into Session Detail with the
+                // matching user turn pre-focused. Both ids are non-nullable in
+                // the GraphQL schema (FeedItem.sessionId / .userTurnId), so
+                // any selected row carries them.
+                if let Some(row) = self.realtime.selected_feed_row() {
+                    self.selection.set_session(Some(row.session_id.clone()));
+                    self.selection.set_turn(Some(row.user_turn_id.clone()));
+                    // Clear any prior session detail so apply_update treats the
+                    // next SessionDetail payload as a fresh load and honors
+                    // selection.turn (instead of restoring a stale cursor).
+                    self.session_detail = None;
+                    self.history.push(Lens::SessionDetail);
+                }
             }
             _ => {}
         }

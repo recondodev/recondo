@@ -255,18 +255,21 @@ pub fn marshal_realtime_feed(resp: realtime_feed::ResponseData) -> Vec<FeedRow> 
                 .http_status
                 .map(|v| i32::try_from(v).unwrap_or(0))
                 .unwrap_or(0),
+            session_id: item.session_id,
+            user_turn_id: item.user_turn_id,
         })
         .collect()
 }
 
 /// Marshal a `GatewayStatus` GraphQL response into (healthy, port). The
 /// schema's `GatewayStatus` does not expose a port field, so we hardcode
-/// 8443 (the gateway's published port). `healthy` parses common synonyms:
-/// "healthy", "ok" → true; everything else (including "degraded",
-/// "unhealthy", empty) → false.
+/// 8443 (the gateway's published port). The canonical status vocabulary
+/// is defined by the data layer in `packages/recondo-data/src/realtime.ts`:
+/// `"live"` (heartbeat within grace window) → healthy; `"offline"` and
+/// `"unknown"` (and anything else) → not healthy.
 pub fn marshal_gateway_status(resp: gateway_status::ResponseData) -> (bool, i32) {
     let s = resp.gateway_status;
-    let healthy = s.status.eq_ignore_ascii_case("healthy") || s.status.eq_ignore_ascii_case("ok");
+    let healthy = s.status.eq_ignore_ascii_case("live");
     let port = 8443;
     (healthy, port)
 }

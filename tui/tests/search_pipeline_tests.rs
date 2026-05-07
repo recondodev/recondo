@@ -212,6 +212,8 @@ fn submit_in_search_applies_filter_to_realtime_feed() {
             tokens: 100,
             cost: 0.10,
             status: 200,
+            session_id: "sess-a".into(),
+            user_turn_id: "sess-a:0".into(),
         },
         FeedRow {
             time: "12:01".into(),
@@ -221,6 +223,8 @@ fn submit_in_search_applies_filter_to_realtime_feed() {
             tokens: 200,
             cost: 0.20,
             status: 200,
+            session_id: "sess-b".into(),
+            user_turn_id: "sess-b:0".into(),
         },
     ]);
     s.handle(KeyAction::OpenSearch);

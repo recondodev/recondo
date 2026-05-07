@@ -65,7 +65,7 @@ default:
     @echo ""
     @echo "TUI (Rust)"
     @echo "  just tui-build        Build the recondo-tui crate"
-    @echo "  just tui-run [ARGS]   Run the recondo-tui binary (args after --)"
+    @echo "  just tui [ARGS]       Run the recondo-tui binary (args after --)"
     @echo "  just tui-test         Run TUI tests via nextest"
     @echo ""
     @echo "@recondo/data Package"
@@ -481,7 +481,7 @@ tui-build:
     cd tui && cargo build
 
 # Run the recondo-tui binary (pass args after `--`)
-tui-run *ARGS:
+tui *ARGS:
     cd tui && cargo run -- {{ARGS}}
 
 # Run TUI tests via nextest (matches the workspace test runner)

@@ -206,6 +206,8 @@ fn realtime_provider_filter_actually_filters_visible_rows() {
             tokens: 100,
             cost: 0.10,
             status: 200,
+            session_id: "sess-a".into(),
+            user_turn_id: "sess-a:0".into(),
         },
         FeedRow {
             time: "12:01".into(),
@@ -215,6 +217,8 @@ fn realtime_provider_filter_actually_filters_visible_rows() {
             tokens: 200,
             cost: 0.20,
             status: 200,
+            session_id: "sess-b".into(),
+            user_turn_id: "sess-b:0".into(),
         },
     ]);
     assert_eq!(s.realtime().visible_rows().len(), 2);

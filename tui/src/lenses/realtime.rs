@@ -29,6 +29,8 @@ pub struct FeedRow {
     pub tokens: i64,
     pub cost: f64,
     pub status: i32,
+    pub session_id: String,
+    pub user_turn_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +204,13 @@ impl RealtimeLens {
                 }
             })
             .collect()
+    }
+
+    /// Returns the currently selected feed row, honoring the active filters.
+    /// Used by the drill dispatcher to deep-link into Session Detail.
+    pub fn selected_feed_row(&self) -> Option<&FeedRow> {
+        let visible = self.visible_rows();
+        visible.get(self.selected_row).copied()
     }
 
     pub fn select_next(&mut self) {

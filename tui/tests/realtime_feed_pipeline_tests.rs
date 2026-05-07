@@ -12,6 +12,8 @@ fn fake_feed_rows() -> Vec<FeedRow> {
             tokens: 100,
             cost: 0.10,
             status: 200,
+            session_id: "sess-a".into(),
+            user_turn_id: "sess-a:0".into(),
         },
         FeedRow {
             time: "12:01".into(),
@@ -21,6 +23,8 @@ fn fake_feed_rows() -> Vec<FeedRow> {
             tokens: 200,
             cost: 0.20,
             status: 200,
+            session_id: "sess-b".into(),
+            user_turn_id: "sess-b:0".into(),
         },
     ]
 }
@@ -170,7 +174,7 @@ fn build_fake_gateway_status_response() -> recondo_tui::gql::queries::gateway_st
         .expect("valid timestamp");
     ResponseData {
         gateway_status: GatewayStatusGatewayStatus {
-            status: "healthy".into(),
+            status: "live".into(),
             uptime_seconds: Some(3600),
             last_heartbeat: Some(hb),
         },

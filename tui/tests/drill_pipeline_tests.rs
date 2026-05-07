@@ -220,6 +220,94 @@ fn esc_on_turn_detail_pops_to_session_detail() {
     assert_eq!(s.lens(), Lens::SessionDetail);
 }
 
+// ---------- D-RT1: drill from realtime feed deep-links to a turn ----------
+
+#[test]
+fn drilling_from_realtime_feed_sets_session_and_turn_selection() {
+    use recondo_tui::lenses::realtime::FeedRow;
+    let mut s = AppState::new();
+    // Default lens is Realtime. Seed two feed rows; cursor starts at row 0.
+    s.realtime_mut().set_rows(vec![
+        FeedRow {
+            time: "12:00".into(),
+            provider: "anthropic".into(),
+            model: "claude-3-5-sonnet".into(),
+            agent: "claude-code".into(),
+            tokens: 100,
+            cost: 0.10,
+            status: 200,
+            session_id: "ses_a".into(),
+            user_turn_id: "ses_a:1".into(),
+        },
+        FeedRow {
+            time: "12:01".into(),
+            provider: "openai".into(),
+            model: "gpt-4o".into(),
+            agent: "cursor".into(),
+            tokens: 200,
+            cost: 0.20,
+            status: 200,
+            session_id: "ses_b".into(),
+            user_turn_id: "ses_b:0".into(),
+        },
+    ]);
+    // Move cursor to row 1 to prove the row's IDs (not the first row's) are
+    // what get pushed into the selection registry.
+    s.handle(KeyAction::MoveDown);
+    s.handle(KeyAction::Drill);
+    assert_eq!(s.lens(), Lens::SessionDetail);
+    assert_eq!(s.session_detail_fetch_id(), Some("ses_b".into()));
+    // selection.turn is staged so the SessionDetail apply path can deep-link.
+    assert_eq!(s.selection().turn(), Some("ses_b:0"));
+}
+
+#[test]
+fn realtime_drill_focuses_user_turn_in_session_detail() {
+    let mut s = AppState::new();
+    // Build a SessionDetail payload whose ids match a feed row's user_turn_id.
+    let sd = SessionDetailLens::new(
+        "ses_a".into(),
+        vec![
+            TurnRow {
+                id: "ses_a:0".into(),
+                sequence: 1,
+                model: "claude-3-5-sonnet".into(),
+                prompt_tokens: 100,
+                completion_tokens: 200,
+                cost: 0.05,
+                tool_calls: 0,
+            },
+            TurnRow {
+                id: "ses_a:1".into(),
+                sequence: 2,
+                model: "claude-3-5-sonnet".into(),
+                prompt_tokens: 150,
+                completion_tokens: 300,
+                cost: 0.10,
+                tool_calls: 1,
+            },
+        ],
+        None,
+    );
+    use recondo_tui::lenses::realtime::FeedRow;
+    s.realtime_mut().set_rows(vec![FeedRow {
+        time: "12:00".into(),
+        provider: "anthropic".into(),
+        model: "claude-3-5-sonnet".into(),
+        agent: "claude-code".into(),
+        tokens: 100,
+        cost: 0.10,
+        status: 200,
+        session_id: "ses_a".into(),
+        user_turn_id: "ses_a:1".into(),
+    }]);
+    s.handle(KeyAction::Drill);
+    s.apply_update(LensUpdate::SessionDetail(sd));
+    let sd = s.session_detail().expect("populated");
+    // Cursor lands on the second turn (`ses_a:1`), not the default row 0.
+    assert_eq!(sd.selected_turn_id(), Some("ses_a:1"));
+}
+
 // ---------- poll_session_detail_once / poll_turn_detail_once ----------
 
 #[tokio::test]

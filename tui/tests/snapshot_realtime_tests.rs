@@ -76,6 +76,8 @@ fn realtime_lens_renders_feed_rows_and_filter_cycle() {
             tokens: 1234 * (i + 1) as i64,
             cost: 0.10 * (i + 1) as f64,
             status: 200,
+            session_id: format!("sess-{i}"),
+            user_turn_id: format!("sess-{i}:0"),
         })
         .collect();
 
