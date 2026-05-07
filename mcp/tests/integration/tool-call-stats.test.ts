@@ -239,4 +239,80 @@ describeIfReady("D-C7-4 recondo_tool_call_stats integration — all 3 group_by v
       expect(r.isError).toBe(true);
     }
   });
+
+  it("rejects period='quarter' at the schema layer (C7 review fix)", async () => {
+    // FIND-C7-2 regression pin: `quarter` was previously accepted and
+    // silently mapped to `all`. The schema now drops it.
+    const bad = await mcp
+      .request<CallToolResult>("tools/call", {
+        name: "recondo_tool_call_stats",
+        arguments: { group_by: "tool_name", period: "quarter" },
+      })
+      .catch((err: unknown) => err);
+    if (bad instanceof Error) {
+      expect(String(bad.message)).toMatch(/(?:Invalid|validation|period)/i);
+    } else {
+      const r = bad as CallToolResult;
+      expect(r.isError).toBe(true);
+    }
+  });
+});
+
+describeIfReady("D-C7-4 recondo_tool_call_stats integration — pagination (limit + offset)", () => {
+  let mcp: SpawnedMcp;
+  let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
+  const sessionId = randomUUID();
+  const turnId = randomUUID();
+
+  beforeAll(async () => {
+    mcp = await spawnMcp({});
+    // Seed 15 distinct tool names so group_by=tool_name produces 15
+    // rows. Each gets a single call with a fixed duration so the
+    // ordering is deterministic across runs.
+    const toolCalls = Array.from({ length: 15 }, (_, i) => ({
+      turnId,
+      toolName: `PaginatedTool${i.toString().padStart(2, "0")}`,
+      status: "success" as const,
+      durationMs: 100 + i,
+    }));
+    seeded = await seedTestDb({
+      sessions: [{ id: sessionId, framework: "claude-code" }],
+      turns: [
+        {
+          id: turnId,
+          sessionId,
+          sequenceNum: 1,
+          httpStatus: 200,
+          captureComplete: true,
+        },
+      ],
+      toolCalls,
+    });
+  });
+
+  afterAll(async () => {
+    await mcp?.close();
+    if (seeded) await seeded.cleanup();
+    try {
+      await truncateCapturedTables();
+    } catch {
+      // pool may already be closed
+    }
+  });
+
+  it("returns 5 rows for {limit: 5, offset: 5} from a 15-row dataset (NOT 0, NOT 10)", async () => {
+    // FIND-C7-1 regression pin: the previous handler collected
+    // `limit` rows then sliced by offset, returning an empty page
+    // whenever `offset >= limit`. The fix drains `offset + limit`
+    // rows first, then slices [offset, offset+limit).
+    const result = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_tool_call_stats",
+      arguments: { group_by: "tool_name", limit: 5, offset: 5 },
+    });
+    expect(result.isError).not.toBe(true);
+    const env = extractEnvelope(result);
+    expectListEnvelope(env);
+    const items = env.items as Array<Record<string, unknown>>;
+    expect(items.length).toBe(5);
+  });
 });

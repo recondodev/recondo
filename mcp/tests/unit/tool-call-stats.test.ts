@@ -174,6 +174,30 @@ describe("D-C7-4 toolCallStatsInputSchema", () => {
     ).toThrow();
   });
 
+  it("schema rejects period='quarter' (no 90-day bucket in the data layer)", () => {
+    // C7 review fix (FIND-C7-2): the data layer has no honest 90-day
+    // bucket; mapping `quarter -> all` silently broadens the window.
+    // The tool-call-stats schema deliberately drops `quarter` so the
+    // contract violation surfaces at the schema layer.
+    expect(() =>
+      toolCallStatsInputSchema.parse({
+        group_by: "tool_name",
+        period: "quarter",
+      }),
+    ).toThrow();
+  });
+
+  it("schema accepts period in {day, week, month}", () => {
+    for (const period of ["day", "week", "month"] as const) {
+      expect(() =>
+        toolCallStatsInputSchema.parse({
+          group_by: "tool_name",
+          period,
+        }),
+      ).not.toThrow();
+    }
+  });
+
   it("schema accepts optional project_id / limit / offset", () => {
     const parsed = toolCallStatsInputSchema.parse({
       group_by: "tool_name",
@@ -358,6 +382,37 @@ describe("D-C7-4 toolCallStatsTool handler — output envelope (Plan D drift pin
     const callArgs = toolCallStats.mock.calls[0];
     const opts = callArgs[0] as { group_by: string };
     expect(opts.group_by).toBe("session");
+  });
+
+  it("paginates correctly when both limit and offset are provided (C7 fix)", async () => {
+    // FIND-C7-1 regression pin: collecting `limit` rows and THEN
+    // slicing by offset returned an empty page when `offset >= limit`.
+    // Seed 15 rows; ask for {limit:5, offset:5} and expect rows 5..9
+    // (the 6th through 10th elements).
+    const fifteen = Array.from({ length: 15 }, (_, i) => ({
+      group_key: `tool-${i.toString().padStart(2, "0")}`,
+      total_calls: i + 1,
+      failure_rate: 0,
+      avg_latency_ms: 100 + i,
+      total_duration_ms: (i + 1) * 100,
+    }));
+    toolCallStats.mockReturnValueOnce(asyncIter(fifteen));
+    const ctx = makeCtx();
+
+    const result = (await toolCallStatsTool.handler(
+      { group_by: "tool_name", limit: 5, offset: 5 } as never,
+      ctx,
+    )) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items.length).toBe(5);
+    const keys = result.items.map((r) => r.group_key);
+    expect(keys).toEqual([
+      "tool-05",
+      "tool-06",
+      "tool-07",
+      "tool-08",
+      "tool-09",
+    ]);
   });
 
   it("yields per-group rows for group_by=framework", async () => {
