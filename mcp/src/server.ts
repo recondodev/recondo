@@ -10,13 +10,14 @@
  * the catalog count + parity lints stay accurate.
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { resolveApiKey, type AuthContext } from "./auth/context.js";
 import { writeAuditEntry } from "./audit/writer.js";
 import type { EnvConfig } from "./config/env.js";
 import type { ParsedFlags } from "./config/flags.js";
+import { buildToolContext } from "./registry/context.js";
 import { registerActionTool, registerReadTool } from "./registry/register.js";
 import type {
   ActionTool,
@@ -24,6 +25,17 @@ import type {
   ClientInfo,
   ReadTool,
 } from "./registry/types.js";
+// C12 — prompts catalog.
+import { findWaste } from "./prompts/find_waste.js";
+import { monitorAnomalies } from "./prompts/monitor_anomalies.js";
+import { summarizeMyWeek } from "./prompts/summarize_my_week.js";
+import { weeklyCostReport } from "./prompts/weekly_cost_report.js";
+import type { PromptDefinition } from "./prompts/types.js";
+// C12 — resources catalog.
+import { sessionResource } from "./resources/session.js";
+import { turnResource } from "./resources/turn.js";
+import { reportResource } from "./resources/report.js";
+import type { ResourceDefinition } from "./resources/types.js";
 import { listSessionsTool } from "./tools/list-sessions.js";
 import { getSessionTool } from "./tools/get-session.js";
 import { getTurnTool } from "./tools/get-turn.js";
@@ -150,6 +162,34 @@ export const ACTION_TOOLS: ActionTool<any, any>[] = [
   deleteKeyTool,
 ];
 
+/**
+ * Single source of truth for the v1 prompt catalog (D-C12-4..D-C12-6).
+ *
+ * 4 prompts:
+ *   - 3 read-only (summarize_my_week, find_waste, monitor_anomalies)
+ *   - 1 action-gated (weekly_cost_report — calls recondo_generate_report,
+ *     so it is only registered when --allow-actions is set)
+ */
+export const PROMPTS: PromptDefinition[] = [
+  summarizeMyWeek,
+  findWaste,
+  weeklyCostReport,
+  monitorAnomalies,
+];
+
+/**
+ * Single source of truth for the v1 resource catalog (D-C12-7).
+ *
+ * 3 resource templates: session, turn, reports. Active-session reads
+ * (`ended_at IS NULL`) are rejected via a structured error envelope —
+ * the integration test asserts the contract against the live SDK.
+ */
+export const RESOURCES: ResourceDefinition[] = [
+  sessionResource,
+  turnResource,
+  reportResource,
+];
+
 export async function createMcpServer(
   args: CreateMcpServerArgs,
 ): Promise<McpServer> {
@@ -206,6 +246,71 @@ export async function createMcpServer(
         resolveClientInfo,
       });
     }
+  }
+
+  // D-C12-4 — prompt registration. Action-gated prompts (those whose
+  // body invokes an action tool — only `weekly_cost_report` today) are
+  // registered ONLY when `--allow-actions` is set; otherwise they're
+  // omitted from `prompts/list` entirely.
+  for (const prompt of PROMPTS) {
+    if (prompt.requiresAction && !args.flags.allowActions) continue;
+    server.registerPrompt(
+      prompt.name,
+      {
+        description: prompt.description,
+      },
+      async () => {
+        const result = await prompt.render();
+        return { messages: result.messages };
+      },
+    );
+  }
+
+  // D-C12-7 — resource registration. The SDK's `registerResource`
+  // accepts a `ResourceTemplate` (RFC 6570 URI template) plus a read
+  // callback; we adapt our `ResourceDefinition.read(uri, ctx)` shape
+  // to the SDK's `(uri: URL, vars, extra) => ReadResourceResult`
+  // signature here. Listing is deliberately disabled (`list:
+  // undefined`) — the catalog is exposed via `resources/templates/list`
+  // only.
+  for (const resource of RESOURCES) {
+    server.registerResource(
+      resource.name,
+      new ResourceTemplate(resource.uriTemplate, { list: undefined }),
+      {
+        description: resource.description,
+        ...(resource.mimeType ? { mimeType: resource.mimeType } : {}),
+      },
+      async (uri, _vars, extra) => {
+        const ctx = buildToolContext(
+          { auth, audit: auditWriter, resolveClientInfo },
+          { signal: extra.signal },
+        );
+        const result = await resource.read(uri.toString(), ctx);
+        const contents = result.contents.map((c) => {
+          // Each MCP resource content entry must carry exactly one of
+          // `text` or `blob`. Default to an empty text body when neither
+          // is supplied (defensive — every read path in resources/
+          // populates `text`).
+          if (c.blob !== undefined) {
+            return {
+              uri: c.uri,
+              blob: c.blob,
+              ...(c.mimeType ? { mimeType: c.mimeType } : {}),
+            };
+          }
+          return {
+            uri: c.uri,
+            text: c.text ?? "",
+            ...(c.mimeType ? { mimeType: c.mimeType } : {}),
+          };
+        });
+        return {
+          contents,
+          ...(result.isError ? { isError: true } : {}),
+        };
+      },
+    );
   }
 
   return server;

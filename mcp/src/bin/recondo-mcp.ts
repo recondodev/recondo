@@ -14,6 +14,10 @@
 import { logger } from "../util/logger.js";
 import { parseFlags } from "../config/flags.js";
 import { loadEnvConfig } from "../config/env.js";
+import {
+  emitRegistrationJson,
+  assertSupportedFlavor,
+} from "../config/registration.js";
 import { createMcpServer, connectStdio } from "../server.js";
 
 async function main(): Promise<void> {
@@ -26,13 +30,34 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // C12 will dispatch `recondo-mcp config <flavor>`. For C1, parse-only.
+  // C12 — `recondo-mcp config <flavor>`. JSON emission is pure and
+  // DB-free; this is the ONLY place in the binary where stdout is a
+  // legitimate output channel (the SDK transport owns stdout otherwise).
   if (flags.remaining[0] === "config") {
-    logger.error(
-      { subcommand: flags.remaining.join(" ") },
-      "config subcommand is not yet implemented (C12)",
-    );
-    process.exit(1);
+    try {
+      const flavorArg = flags.remaining[1];
+      if (typeof flavorArg !== "string" || flavorArg.length === 0) {
+        throw new Error(
+          "config subcommand requires a flavor argument (claude-code | cursor | goose)",
+        );
+      }
+      const flavor = assertSupportedFlavor(flavorArg);
+      // No extra positional args after the flavor are expected.
+      if (flags.remaining.length > 2) {
+        throw new Error(
+          `unexpected positional argument(s) after flavor: ${flags.remaining
+            .slice(2)
+            .join(" ")}`,
+        );
+      }
+      const json = emitRegistrationJson({ client: flavor });
+      process.stdout.write(json + "\n");
+      process.exit(0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ error: msg }, "config subcommand failed");
+      process.exit(1);
+    }
   }
 
   let env;
