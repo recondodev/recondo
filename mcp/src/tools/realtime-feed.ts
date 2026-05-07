@@ -47,10 +47,13 @@ const DESCRIPTION =
   "Paginated real-time activity feed over recently captured user turns. " +
   "Returns a 5-key list envelope (items / next_offset / truncated / " +
   "stream_id / is_final). Each item carries provider, model, framework, " +
-  "duration, token + cost rollups, and an envelope-wrapped intent " +
-  "snippet. Pass `since` (ISO-8601 timestamp or opaque cursor) for " +
-  "incremental polling; recommended polling cadence is 30 seconds — " +
-  "faster than 30s wastes bandwidth and risks rate-limiter trips.";
+  "duration, token + cost rollups, and an `intent` field that is the " +
+  "captured user message wrapped in a `<captured_user_message>` envelope " +
+  "(role / from_session_id / from_turn_id / content) — XML-escaped so " +
+  "adversarial intent text cannot escape into instructions. Pass `since` " +
+  "(ISO-8601 timestamp or opaque cursor) for incremental polling; " +
+  "recommended polling cadence is 30 seconds — faster than 30s wastes " +
+  "bandwidth and risks rate-limiter trips.";
 
 function authContextToApiKey(
   auth: AuthContext,
@@ -68,8 +71,7 @@ interface FeedItemOut {
   provider: string;
   model: string | null;
   framework: string | null;
-  intent: string | null;
-  intent_envelope: MessageEnvelope | null;
+  intent: MessageEnvelope | null;
   total_tokens: number;
   cost_usd: number;
   http_status: number | null;
@@ -83,10 +85,13 @@ interface FeedItemOut {
 }
 
 function projectFeedItem(item: RealtimeFeedItem): FeedItemOut {
-  // The intent text is captured user content — wrap it in the
-  // canonical `<captured_user_message>` envelope so adversarial intent
-  // text can't escape into instructions for the consuming agent.
-  const intentEnvelope =
+  // The intent text is captured user content — REPLACE the raw string
+  // with the canonical `<captured_user_message>` envelope so adversarial
+  // intent text can't escape into instructions for the consuming agent.
+  // Mirrors `mcp/src/tools/get-turn.ts` which replaces `userRequestText`
+  // with the envelope rather than carrying both raw and wrapped fields
+  // (any raw field would be a prompt-injection bypass).
+  const intent =
     item.intent !== null && item.intent !== undefined
       ? buildMessageEnvelope(
           "user",
@@ -100,8 +105,7 @@ function projectFeedItem(item: RealtimeFeedItem): FeedItemOut {
     provider: item.provider,
     model: item.model,
     framework: item.framework,
-    intent: item.intent,
-    intent_envelope: intentEnvelope,
+    intent,
     total_tokens: item.totalTokens,
     cost_usd: item.costUsd,
     http_status: item.httpStatus,

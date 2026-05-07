@@ -7,14 +7,21 @@
  * helpers. See `packages/recondo-data/src/cost.ts:getCostProjections`.
  *
  * The data layer returns a fixed 3-element `CostProjection[]` (one
- * row per upcoming month). The MCP handler returns it under
- * `{ projections: CostProjection[] }` so the response wraps cleanly
- * into the SDK's `structuredContent` (which must be an object, not
- * a top-level array).
+ * row per upcoming month). The MCP handler wraps it as
+ * `{ projections: CostProjection[] }` to keep `structuredContent` shaped
+ * as an object — this matches the convention used across recondo's
+ * single-record read tools (not an SDK-mandated requirement).
  *
  * Period translation: optional `period` is translated from the MCP
  * human-readable enum to the data-layer `DAY_<n>` token via
  * `toDataLayerPeriod` and forwarded as the second positional arg.
+ *
+ * TODO(plan-e): the data layer (`packages/recondo-data/src/cost.ts`
+ * `getCostProjections`) currently ignores its `_period` parameter and
+ * always returns a 30-day-trend projection. Tracked for Plan E.
+ * The MCP description below reflects the current behavior (period is
+ * reserved / not yet honored) so we don't promise period-awareness we
+ * cannot deliver.
  *
  * `ctx.abortSignal` is threaded into the data-layer options.
  */
@@ -40,9 +47,10 @@ const DESCRIPTION =
   "trend. Returns `{ projections: [...] }` with three rows (one per " +
   "upcoming month) carrying `month` (YYYY-MM), `projectedSessions`, " +
   "`projectedTokens`, `projectedCostUsd`, `deltaVsCurrent`, and a " +
-  "human-readable `assumptions` string. Optional `period` (day / " +
-  "week / month / quarter) hints the trend window — note `period` " +
-  "is forwarded as a positional arg to the data layer.";
+  "human-readable `assumptions` string. v1: the optional `period` " +
+  "(day / week / month / quarter) parameter is reserved — the current " +
+  "data layer always projects from a 30-day trend window regardless " +
+  "of the value supplied.";
 
 function authContextToApiKey(
   auth: AuthContext,
