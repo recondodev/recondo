@@ -71,7 +71,7 @@ describeIfReady("D-C9-1 recondo_policies schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -93,7 +93,7 @@ describeIfReady("D-C9-1 recondo_policies integration", () => {
   const policyName = `Test Policy ${policyId}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(
@@ -133,7 +133,7 @@ describeIfReady("D-C9-1 recondo_policies include=trigger_history", () => {
   const policyName = `Trend Policy ${policyId}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(

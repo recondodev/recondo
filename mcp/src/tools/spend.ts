@@ -47,6 +47,8 @@ const inputShape = {
   group_by: z.enum(["provider", "model", "framework", "daily"]),
   period: z.enum(["day", "week", "month", "quarter"]).optional(),
   project_id: z.string().optional(),
+  limit: z.number().int().min(1).max(500).default(20),
+  offset: z.number().int().min(0).default(0),
 };
 
 export const spendInputSchema = z.object(inputShape);
@@ -58,8 +60,8 @@ const DESCRIPTION =
   "to the matching `listSpendBy*` data-layer helper and returns the " +
   "canonical 5-key list envelope of `SpendBucket` rows (name / " +
   "costUsd / percentage / count). Optional `period` (day / week / " +
-  "month / quarter) narrows the time range; `daily` uses a fixed " +
-  "14-day window.";
+  "month / quarter) narrows the time range; `limit` / `offset` page " +
+  "the grouped rows; `daily` uses a fixed 14-day window.";
 
 function authContextToApiKey(
   auth: AuthContext,
@@ -75,7 +77,7 @@ function authContextToApiKey(
 type SpendDispatcher = (
   apiKey: ApiKeyInfo,
   args: CostQueryArgs,
-  options: { signal?: AbortSignal },
+  options: { limit?: number; offset?: number; signal?: AbortSignal },
 ) => Promise<ListEnvelope<SpendBucket>>;
 
 function pickDispatcher(groupBy: SpendInput["group_by"]): SpendDispatcher {
@@ -103,9 +105,17 @@ export const spendTool: ReadTool<SpendInput, unknown> = {
     if (translated !== undefined) args.period = translated;
 
     const dispatch = pickDispatcher(input.group_by);
-    const envelope = await dispatch(apiKey, args, { signal: ctx.abortSignal });
+    const envelope = await dispatch(apiKey, args, {
+      limit: input.limit,
+      offset: input.offset,
+      signal: ctx.abortSignal,
+    });
 
-    const budget = enforceListBudget(envelope.items, 0, JSON.stringify);
+    const budget = enforceListBudget(
+      envelope.items,
+      input.offset,
+      JSON.stringify,
+    );
     if (!budget.truncated) {
       return envelope;
     }

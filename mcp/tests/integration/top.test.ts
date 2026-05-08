@@ -67,7 +67,7 @@ describeIfReady("D-C7-3 recondo_top schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -102,7 +102,7 @@ describeIfReady("D-C7-3 recondo_top integration — both dimensions dispatch", (
   const repoName = "github.com/example/recondo-top-test";
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const sessionId = randomUUID();
     const turnId = randomUUID();
     seeded = await seedTestDb({

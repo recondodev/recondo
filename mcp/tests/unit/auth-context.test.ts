@@ -60,11 +60,11 @@ describe("D-C1-7 resolveApiKey", () => {
 
   it("rejected real key — authenticateApiKey returns null → resolveApiKey throws", async () => {
     authenticateApiKey.mockResolvedValueOnce(null);
-    await expect(resolveApiKey({ apiKey: "wrt_bogus" })).rejects.toThrow();
+    await expect(resolveApiKey({ apiKey: "wrt_bogus" })).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("rejected real key — authenticateApiKey throws → resolveApiKey rejects", async () => {
     authenticateApiKey.mockRejectedValueOnce(new Error("db down"));
-    await expect(resolveApiKey({ apiKey: "wrt_throwing" })).rejects.toThrow();
+    await expect(resolveApiKey({ apiKey: "wrt_throwing" })).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

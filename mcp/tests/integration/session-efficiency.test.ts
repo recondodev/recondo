@@ -68,7 +68,7 @@ describeIfReady("D-C5-4 recondo_session_efficiency schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -98,7 +98,7 @@ describeIfReady("D-C5-4 recondo_session_efficiency end-to-end", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

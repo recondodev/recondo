@@ -94,7 +94,7 @@ export const policiesTool: ReadTool<PoliciesInput, unknown> = {
 
     const envelope: PoliciesEnvelope = await listPolicies(
       apiKey,
-      {},
+      input.policy_id === undefined ? {} : { policyId: input.policy_id },
       listOptions,
     );
 
@@ -111,7 +111,7 @@ export const policiesTool: ReadTool<PoliciesInput, unknown> = {
         if (wantTriggerHistory) {
           next.triggerHistory = await listPolicyTriggerHistory(
             apiKey,
-            {},
+            { policyId: row.id },
             { signal: ctx.abortSignal },
           );
         }

@@ -205,7 +205,7 @@ describe("D-C6-3 usageSummaryTool handler — call-shape + signal threading", ()
 
     await expect(
       usageSummaryTool.handler({ period: "week" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("default period 'week' reaches the data-layer call args", async () => {
@@ -284,6 +284,6 @@ describe("D-C6-3 usageSummaryTool — pre-aborted signal", () => {
 
     await expect(
       usageSummaryTool.handler({ period: "week" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

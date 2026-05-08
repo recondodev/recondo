@@ -60,7 +60,7 @@ describeIfReady("D-C6-5 recondo_cost_projections schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -89,7 +89,7 @@ describeIfReady("D-C6-5 recondo_cost_projections integration", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const sessionId = randomUUID();
     const turnId = randomUUID();
     seeded = await seedTestDb({

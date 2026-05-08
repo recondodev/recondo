@@ -118,8 +118,12 @@ describe("D-HT2: client disconnect aborts in-flight /v1/query (in-process)", () 
       await new Promise((r) => setTimeout(r, 25));
     }
 
-    expect(captured.signal).toBeDefined();
-    expect(captured.signal?.aborted).toBe(false);
+    const signal = captured.signal as AbortSignal | undefined;
+    expect(signal).toBeDefined();
+    if (signal === undefined) {
+      throw new Error("runStructuredQuery did not receive an AbortSignal");
+    }
+    expect(signal.aborted).toBe(false);
 
     // Trigger client-side disconnect.
     clientCtrl.abort();
@@ -128,12 +132,12 @@ describe("D-HT2: client disconnect aborts in-flight /v1/query (in-process)", () 
     const abortDeadline = Date.now() + 2000;
     while (
       Date.now() < abortDeadline &&
-      captured.signal?.aborted !== true
+      signal.aborted !== true
     ) {
       await new Promise((r) => setTimeout(r, 25));
     }
 
-    expect(captured.signal?.aborted).toBe(true);
+    expect(signal.aborted).toBe(true);
 
     // Release the held query so the route handler unwinds cleanly.
     if (captured.resolveHeld) {

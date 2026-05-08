@@ -35,6 +35,42 @@ describe("@recondo/data: insertAuditLog (D-C1-8)", () => {
     expect(sqlStrings).toMatch(/response_bytes/);
     expect(sqlStrings).toMatch(/client_name/);
     expect(sqlStrings).toMatch(/key_id/);
+    expect(sqlStrings).toMatch(/outcome/);
+    expect(sqlStrings).toMatch(/error_message/);
+    spy.mockRestore();
+  });
+
+  it("defaults to success outcome and null error message", async () => {
+    const pool = getPool();
+    const spy = vi
+      .spyOn(pool, "query")
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 } as never);
+    await insertAuditLog({
+      toolName: "x",
+      arguments: {},
+      responseBytes: 0,
+    });
+    const params = spy.mock.calls[0][1] as unknown[];
+    expect(params).toContain("success");
+    expect(params).toContain(null);
+    spy.mockRestore();
+  });
+
+  it("persists explicit error outcome metadata", async () => {
+    const pool = getPool();
+    const spy = vi
+      .spyOn(pool, "query")
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 } as never);
+    await insertAuditLog({
+      toolName: "x",
+      arguments: {},
+      responseBytes: 0,
+      outcome: "error",
+      errorMessage: "handler failed",
+    });
+    const params = spy.mock.calls[0][1] as unknown[];
+    expect(params).toContain("error");
+    expect(params).toContain("handler failed");
     spy.mockRestore();
   });
 
@@ -88,7 +124,7 @@ describe("@recondo/data: insertAuditLog (D-C1-8)", () => {
         },
         { signal: ctrl.signal },
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });

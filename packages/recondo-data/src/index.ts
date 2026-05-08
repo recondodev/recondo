@@ -15,6 +15,9 @@ export type {
 } from "./types.js";
 export { DataValidationError } from "./types.js";
 
+// Static table-target metadata used by MCP catalog linting.
+export { CAPTURED_TABLES, TABLE_TARGETS } from "./table-targets.js";
+
 // Envelope + cursor codec.
 export type { EnvelopeMeta } from "./envelope.js";
 export {
@@ -162,6 +165,15 @@ export type {
   CostProjection,
 } from "./cost.js";
 
+// Operator insight synthesis.
+export { getInsights } from "./insights.js";
+export type {
+  Insight,
+  InsightKind,
+  InsightSeverity,
+  InsightsArgs,
+} from "./insights.js";
+
 // Audit trail: list events for GraphQL + bulk fetch for REST exports.
 // `insertAuditLog` (added for MCP v1, D-C1-8) writes the `audit_log`
 // table used by the recondo-mcp server's per-call audit.
@@ -241,6 +253,8 @@ export type {
   ReportFindings,
   TrendPoint,
   GenerateReportInput,
+  GenerateReportPeriod,
+  GenerateReportType,
   GenerateReportPayload,
   GenerateReportError,
 } from "./reports.js";
@@ -269,9 +283,12 @@ export {
   listApiKeys,
   createApiKey,
   revokeApiKey,
+  mintScopedKey,
 } from "./keys.js";
 export type {
   ApiKeyRecord,
   ApiKeyFilter,
   CreateApiKeyInput,
+  MintScopedKeyInput,
+  MintScopedKeyResult,
 } from "./keys.js";

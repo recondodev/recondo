@@ -30,7 +30,7 @@ export function loadEnvConfig(env: Record<string, string | undefined>): EnvConfi
 
   const apiKey = env.RECONDO_API_KEY;
   const devBypass = env.RECONDO_DEV_BYPASS === "1";
-  const nodeEnv = env.NODE_ENV ?? "development";
+  const nodeEnv = env.NODE_ENV ?? "production";
 
   // Auth gate: dev-bypass is only honored when NODE_ENV=development.
   // Outside development, an API key is mandatory.

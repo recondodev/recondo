@@ -321,7 +321,7 @@ describe("D-C4-2 searchTool handler — AbortSignal threading", () => {
 
     await expect(
       searchTool.handler({ query: "hi" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -492,5 +492,49 @@ describe("D-C4-3 searchTool handler — captured-message wrapping per scope", ()
     expect(result.truncated).toBe(false);
     expect(result.next_offset).toBeNull();
     expect(result.is_final).toBe(true);
+  });
+
+  it("uses offset to return a later relevance page and emits next_offset with a sentinel row", async () => {
+    searchTurns.mockReturnValueOnce(
+      asyncIter([
+        { ...baseTurn, id: "turn-1", userRequestText: "needle one" },
+        { ...baseTurn, id: "turn-2", userRequestText: "needle two" },
+        { ...baseTurn, id: "turn-3", userRequestText: "needle three" },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await searchTool.handler(
+      { query: "needle", scope: "prompt", limit: 1, offset: 1 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("turn-2");
+    expect(result.next_offset).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("returns null next_offset on the final relevance page", async () => {
+    searchTurns.mockReturnValueOnce(
+      asyncIter([
+        { ...baseTurn, id: "turn-1", userRequestText: "needle one" },
+        { ...baseTurn, id: "turn-2", userRequestText: "needle two" },
+        { ...baseTurn, id: "turn-3", userRequestText: "needle three" },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await searchTool.handler(
+      { query: "needle", scope: "prompt", limit: 2, offset: 2 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("turn-3");
+    expect(result.next_offset).toBeNull();
+    expect(result.truncated).toBe(false);
   });
 });

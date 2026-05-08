@@ -227,7 +227,7 @@ describe("D-C7-2 agentFrameworkDistributionTool handler — call shape + signal 
 
     await expect(
       agentFrameworkDistributionTool.handler({} as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

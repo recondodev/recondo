@@ -68,7 +68,7 @@ describeIfReady("D-C8-6 recondo_report_trends schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -101,7 +101,7 @@ describeIfReady("D-C8-6 recondo_report_trends integration — both metrics", () 
   const reportName = `Trend Report ${reportId}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
 

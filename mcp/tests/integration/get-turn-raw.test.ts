@@ -68,7 +68,7 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -134,7 +134,7 @@ describeIfReady("D-C3-3 / D-C3-4 raw-byte tools — happy-path round-trip", () =
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

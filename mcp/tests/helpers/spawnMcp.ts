@@ -47,6 +47,11 @@ export interface SpawnMcpOptions {
   clientInfo?: { name?: string; version?: string };
   /** Per-request timeout (ms). Default 10000. */
   timeoutMs?: number;
+  /**
+   * Opt into the local development auth bypass. Defaults false so tests
+   * exercise production-mode auth unless they explicitly request bypass.
+   */
+  devBypass?: boolean;
 }
 
 export interface SpawnedMcp {
@@ -75,25 +80,21 @@ export async function spawnMcp(
   for (const [k, v] of Object.entries(process.env)) {
     if (typeof v === "string") baseEnv[k] = v;
   }
-  // Sensible defaults for local dev-infra.
-  if (!baseEnv.RECONDO_OBJECT_STORE_PATH) {
+  if (options.devBypass === true && !baseEnv.RECONDO_OBJECT_STORE_PATH) {
     baseEnv.RECONDO_OBJECT_STORE_PATH = "/tmp/recondo-objects";
   }
-  // The catalog-count integration test (D-C9-3) deliberately runs
-  // without a live database — `tools/list` doesn't hit the DB. The env
-  // loader still requires DATABASE_URL to be a non-empty string, so
-  // supply a placeholder that resolves syntactically. Tests that
-  // actually need a working DB must set DATABASE_URL themselves (and
-  // gate with HAVE_DB so they skip when unset).
-  if (!baseEnv.DATABASE_URL) {
+  if (options.devBypass === true && !baseEnv.DATABASE_URL) {
     baseEnv.DATABASE_URL = "postgres://placeholder:placeholder@127.0.0.1:0/placeholder";
   }
-  if (!baseEnv.RECONDO_DEV_BYPASS) baseEnv.RECONDO_DEV_BYPASS = "1";
-  // The env loader only honours dev-bypass when NODE_ENV=development.
-  // Vitest sets NODE_ENV=test, so we always force it back to
-  // development for the spawned subprocess unless the caller supplies
-  // an explicit override.
-  baseEnv.NODE_ENV = "development";
+  if (options.devBypass === true) {
+    baseEnv.RECONDO_DEV_BYPASS = "1";
+    baseEnv.NODE_ENV = "development";
+  } else {
+    delete baseEnv.RECONDO_DEV_BYPASS;
+    if (baseEnv.NODE_ENV === "development" && !baseEnv.RECONDO_API_KEY) {
+      delete baseEnv.NODE_ENV;
+    }
+  }
   Object.assign(baseEnv, options.env ?? {});
 
   const child = spawn(process.execPath, [RECONDO_MCP_BINARY, ...(options.args ?? [])], {

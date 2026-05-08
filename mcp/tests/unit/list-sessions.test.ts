@@ -152,7 +152,7 @@ describe("D-C2-3 listSessionsTool handler — AbortSignal threading", () => {
     const ctx = makeCtx({ abortSignal: ac.signal });
     await expect(
       listSessionsTool.handler({ limit: 5 } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("forwards `since` to listSessions as filter.startedAfter", async () => {
@@ -219,5 +219,26 @@ describe("D-C2-3 listSessionsTool handler — AbortSignal threading", () => {
     expect(keys).toContain("is_final");
     expect(result.is_final).toBe(true);
     expect(result.stream_id).toBeNull();
+  });
+
+  it("preserves the data-layer next_offset when the page fits the byte budget", async () => {
+    listSessions.mockResolvedValueOnce({
+      items: [{ id: "session-1" }, { id: "session-2" }],
+      next_offset: 2,
+      truncated: true,
+      stream_id: null,
+      is_final: true,
+      total: 3,
+    });
+    const ctx = makeCtx();
+
+    const result = (await listSessionsTool.handler(
+      { limit: 2, offset: 0 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(result.next_offset).toBe(2);
+    expect(result.truncated).toBe(true);
+    expect(result.total).toBe(3);
   });
 });

@@ -257,6 +257,14 @@ describe("D-C9-1 policiesTool handler — call wiring (no include)", () => {
     expect(apiKey.projectId).toBe("override-project");
   });
 
+  it("forwards policy_id as a listPolicies filter", async () => {
+    listPolicies.mockResolvedValueOnce(listEnvelope([]));
+    const ctx = makeCtx();
+    await policiesTool.handler({ policy_id: "pol-42" } as never, ctx);
+    const [, filter] = listPolicies.mock.calls[0];
+    expect(filter).toEqual({ policyId: "pol-42" });
+  });
+
   it("propagates AbortError when listPolicies rejects", async () => {
     listPolicies.mockRejectedValueOnce(
       new DOMException("aborted", "AbortError"),
@@ -264,7 +272,7 @@ describe("D-C9-1 policiesTool handler — call wiring (no include)", () => {
     const ac = new AbortController();
     ac.abort();
     const ctx = makeCtx({ abortSignal: ac.signal });
-    await expect(policiesTool.handler({} as never, ctx)).rejects.toThrow();
+    await expect(policiesTool.handler({} as never, ctx)).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -288,6 +296,12 @@ describe("D-C9-1 policiesTool handler — include flag merging", () => {
       ctx,
     );
     expect(listPolicyTriggerHistory).toHaveBeenCalledTimes(2);
+    expect(listPolicyTriggerHistory.mock.calls[0][1]).toEqual({
+      policyId: "pol-a",
+    });
+    expect(listPolicyTriggerHistory.mock.calls[1][1]).toEqual({
+      policyId: "pol-b",
+    });
   });
 
   it("merges trigger_history into each policy row under a documented key", async () => {

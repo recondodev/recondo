@@ -53,7 +53,7 @@ describeIfReady("D-C5-2 recondo_find_similar_prompts end-to-end", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -189,5 +189,56 @@ describeIfReady("D-C5-2 recondo_find_similar_prompts end-to-end", () => {
       const r = bad as CallToolResult;
       expect(r.isError).toBe(true);
     }
+  });
+
+  it("returns a usable next_offset that advances to new similar prompts", async () => {
+    const sessionId = randomUUID();
+    const sharedPrompt = `similar-cursor-token-${randomUUID()}`;
+    const turnIds = Array.from({ length: 8 }, () => randomUUID());
+
+    if (seeded) await seeded.cleanup();
+    seeded = await seedTestDb({
+      sessions: [{ id: sessionId, framework: "claude-code" }],
+      turns: turnIds.map((id, i) => ({
+        id,
+        sessionId,
+        sequenceNum: i + 1,
+        userRequestText: sharedPrompt,
+        responseText: `ack ${i}`,
+      })),
+    });
+
+    const first = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_find_similar_prompts",
+      arguments: { turn_id: turnIds[0], limit: 2 },
+    });
+    expect(first.isError).not.toBe(true);
+    const env1 = extractEnvelope(first);
+    expect(env1.next_offset).toBe(2);
+    expect(env1.truncated).toBe(true);
+
+    const second = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_find_similar_prompts",
+      arguments: { turn_id: turnIds[0], limit: 2, offset: 2 },
+    });
+    expect(second.isError).not.toBe(true);
+    const env2 = extractEnvelope(second);
+    const firstIds = new Set(
+      (env1.items as Array<{ turn_id: string }>).map((item) => item.turn_id),
+    );
+    const secondIds = (env2.items as Array<{ turn_id: string }>).map(
+      (item) => item.turn_id,
+    );
+    expect(secondIds.some((id) => firstIds.has(id))).toBe(false);
+
+    const final = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_find_similar_prompts",
+      arguments: { turn_id: turnIds[0], limit: 2, offset: 6 },
+    });
+    expect(final.isError).not.toBe(true);
+    const env3 = extractEnvelope(final);
+    expect((env3.items as unknown[]).length).toBe(1);
+    expect(env3.next_offset).toBeNull();
+    expect(env3.truncated).toBe(false);
   });
 });

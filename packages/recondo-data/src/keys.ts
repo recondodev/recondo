@@ -39,6 +39,7 @@ import crypto from "node:crypto";
 import { getPool } from "./pool.js";
 import { uniformListEnvelope } from "./envelope.js";
 import { formatTimestamp } from "./mappers.js";
+import { insertAuditLog } from "./audit.js";
 import type { ApiKeyInfo, ListEnvelope, ListOptions, QueryOptions } from "./types.js";
 
 export interface ApiKeyRecord {
@@ -61,6 +62,18 @@ export interface CreateApiKeyInput {
   name: string;
   provider: string;
   fingerprint: string;
+}
+
+export interface MintScopedKeyInput {
+  projectId: string;
+  name: string;
+}
+
+export interface MintScopedKeyResult {
+  keyId: string;
+  rawSecret: string;
+  scopedProjectId: string;
+  createdAt: Date;
 }
 
 function mapApiKeyRow(row: Record<string, unknown>): ApiKeyRecord {
@@ -207,4 +220,51 @@ export async function revokeApiKey(
 
   if (result.rowCount === 0) return null;
   return { id: result.rows[0].id as string };
+}
+
+export async function mintScopedKey(
+  args: MintScopedKeyInput,
+  options: QueryOptions = {},
+): Promise<MintScopedKeyResult> {
+  if (options.signal?.aborted) {
+    throw new DOMException("aborted", "AbortError");
+  }
+  if (!args.projectId || args.projectId.trim().length === 0) {
+    throw new Error("mintScopedKey: projectId is required");
+  }
+  if (!args.name || args.name.trim().length === 0) {
+    throw new Error("mintScopedKey: name is required");
+  }
+
+  const pool = getPool();
+  const keyId = crypto.randomUUID();
+  const rawSecret = `wrt_${crypto.randomBytes(32).toString("base64url")}`;
+  const keyHash = crypto.createHash("sha256").update(rawSecret).digest("hex");
+  const createdAt = new Date();
+
+  await pool.query(
+    `INSERT INTO api_keys (id, key_hash, project_id, rate_limit_rpm, name, scope, created_at)
+     VALUES ($1, $2, $3, 60, $4, 'scoped', $5)`,
+    [keyId, keyHash, args.projectId, args.name, createdAt],
+  );
+
+  await insertAuditLog(
+    {
+      toolName: "mintScopedKey",
+      arguments: { projectId: args.projectId, name: args.name },
+      responseBytes: 0,
+      keyId,
+      outcome: "success",
+      errorMessage: null,
+      requestedAt: createdAt,
+    },
+    options,
+  );
+
+  return {
+    keyId,
+    rawSecret,
+    scopedProjectId: args.projectId,
+    createdAt,
+  };
 }

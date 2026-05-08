@@ -102,8 +102,10 @@ export async function listAnomalies(
   if (limit > 1000) limit = 1000;
   if (offset < 0) offset = 0;
   if (offset > 100000) offset = 100000;
+  const requestedLimit = limit;
+  const queryLimit = requestedLimit < 1000 ? requestedLimit + 1 : requestedLimit;
 
-  params.push(limit);
+  params.push(queryLimit);
   const limitIdx = idx++;
   params.push(offset);
   const offsetIdx = idx++;
@@ -117,8 +119,10 @@ export async function listAnomalies(
     params,
   );
 
-  const items = result.rows.map(mapAnomaly);
-  const truncated = items.length === limit;
+  const hasMore = requestedLimit < 1000 && result.rows.length > requestedLimit;
+  const rows = hasMore ? result.rows.slice(0, requestedLimit) : result.rows;
+  const items = rows.map(mapAnomaly);
+  const truncated = hasMore;
   const nextOffset = truncated ? offset + items.length : null;
   return uniformListEnvelope(items, { nextOffset, truncated });
 }

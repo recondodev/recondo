@@ -59,7 +59,7 @@ describeIfReady("D-C7-1 recondo_agent_summary schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -83,7 +83,7 @@ describeIfReady("D-C7-1 recondo_agent_summary integration — single record", ()
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const sessionId = randomUUID();
     const turnId = randomUUID();
     seeded = await seedTestDb({

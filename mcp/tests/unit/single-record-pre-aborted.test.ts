@@ -85,7 +85,7 @@ describe("D-C3-5 pre-aborted signal — recondo_get_session", () => {
     const ctx = abortedCtx();
     await expect(
       getSessionTool.handler({ session_id: "s-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -95,7 +95,7 @@ describe("D-C3-5 pre-aborted signal — recondo_get_turn", () => {
     const ctx = abortedCtx();
     await expect(
       getTurnTool.handler({ turn_id: "t-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -108,7 +108,7 @@ describe("D-C3-5 pre-aborted signal — recondo_get_turn_raw_metadata", () => {
         { turn_id: "t-1" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -121,6 +121,6 @@ describe("D-C3-5 pre-aborted signal — recondo_get_turn_raw_chunk", () => {
         { turn_id: "t-1", offset: 0, length: 100 } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

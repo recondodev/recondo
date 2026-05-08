@@ -3,11 +3,11 @@
  * + naming-convention lint.
  *
  * Contract pinned by C0 audit:
- *   - The C8 chunk registered 25 read tools (insights DROPPED per C0 §5
- *     #1 — no matching `data.insights` resolver exists).
+ *   - The C8/hardening catalog registers 26 read tools including
+ *     `recondo_insights`.
  *   - C9 adds exactly TWO more: `recondo_policies` and
  *     `recondo_registered_keys`.
- *   - Therefore after C9, `READ_TOOLS.length === 27` (NOT 28).
+ *   - Therefore after hardening, `READ_TOOLS.length === 28`.
  *
  * Implementer requirement (handed off in plain text — the Test Writer
  * never modifies production code): `mcp/src/server.ts` MUST expose the
@@ -28,7 +28,7 @@
  *
  * If the implementer chooses a different export name or location, this
  * test must keep the SAME contract:
- *   - exactly 27 read tools after C9
+ *   - exactly 28 read tools after C9
  *   - every description length >= 50 chars
  *   - every tool name matches `/^recondo_[a-z_]+$/`
  *
@@ -49,8 +49,8 @@ describe("D-C9-3 read-tool catalog count", () => {
     expect(Array.isArray(READ_TOOLS)).toBe(true);
   });
 
-  it("READ_TOOLS.length === 27 after C9 (25 from C8 + policies + registered_keys; insights dropped per C0)", () => {
-    expect(READ_TOOLS.length).toBe(27);
+  it("READ_TOOLS.length === 28 after C9 (25 from C8 + policies + registered_keys; insights restored)", () => {
+    expect(READ_TOOLS.length).toBe(28);
   });
 
   it("all tool names are unique", () => {
@@ -86,8 +86,6 @@ describe("D-C9-3 read-tool catalog membership", () => {
   it("includes every C2..C8 read tool plus the two new C9 tools", () => {
     // Pinned membership for the v1 catalog. Order is irrelevant — we
     // sort both sides — but presence of every name is mandatory.
-    // Notable absences (intentional, per C0):
-    //   - recondo_insights      (no matching `data.insights` resolver — DROPPED)
     const expected = [
       // C2 — bootstrap read tools.
       "recondo_list_sessions",
@@ -113,12 +111,13 @@ describe("D-C9-3 read-tool catalog membership", () => {
       "recondo_agent_framework_distribution",
       "recondo_top",
       "recondo_tool_call_stats",
-      // C8 — audit / anomaly / compliance / reports (5 total, insights dropped).
+      // C8/hardening — audit / anomaly / compliance / reports / insights.
       "recondo_audit_trail",
       "recondo_anomalies",
       "recondo_compliance",
       "recondo_reports",
       "recondo_report_trends",
+      "recondo_insights",
       // C9 — policy + key reads.
       "recondo_policies",
       "recondo_registered_keys",
@@ -129,10 +128,10 @@ describe("D-C9-3 read-tool catalog membership", () => {
     expect(actual).toEqual(expected.slice().sort());
   });
 
-  it("does NOT include the dropped recondo_insights tool", () => {
+  it("includes the restored recondo_insights tool", () => {
     const names = (READ_TOOLS as ReadTool<unknown, unknown>[]).map(
       (t) => t.name,
     );
-    expect(names).not.toContain("recondo_insights");
+    expect(names).toContain("recondo_insights");
   });
 });

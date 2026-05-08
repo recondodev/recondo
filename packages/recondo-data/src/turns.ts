@@ -179,6 +179,9 @@ export function searchTurns(
     const projectCondition = effectiveProjectId ? `s.project_id = $1 AND ` : "";
     const baseParams: unknown[] = effectiveProjectId ? [effectiveProjectId] : [];
     const queryParamIdx = effectiveProjectId ? 2 : 1;
+    let requestedLimit = options.limit ?? 100;
+    if (requestedLimit <= 0) requestedLimit = 100;
+    requestedLimit = Math.min(Math.floor(requestedLimit), 1000);
 
     try {
       const result = await raceAbort(
@@ -187,13 +190,13 @@ export function searchTurns(
            JOIN sessions s ON t.session_id = s.id
            WHERE ${projectCondition}t.search_vector @@ plainto_tsquery('english', $${queryParamIdx})
            ORDER BY t.timestamp DESC, t.id ASC
-           LIMIT 100`,
-          [...baseParams, query],
+           LIMIT $${queryParamIdx + 1}`,
+          [...baseParams, query, requestedLimit],
         ),
         options.signal,
       );
       if (result.rows.length > 0) {
-        for (const row of postFilterByMaskedQuery(result.rows, query, 100)) {
+        for (const row of postFilterByMaskedQuery(result.rows, query, requestedLimit)) {
           yield mapTurn(row);
         }
         return;
@@ -232,9 +235,9 @@ export function searchTurns(
               [...baseParams, escapedQuery, ...placeholderParams, batchLimit, offset],
             ),
             options.signal,
-          ),
+        ),
         query,
-        100,
+        requestedLimit,
       );
       for (const row of rows) yield mapTurn(row);
     } catch (err) {
@@ -272,9 +275,9 @@ export function searchTurns(
               [...baseParams, escapedQuery, ...placeholderParams, batchLimit, offset],
             ),
             options.signal,
-          ),
+        ),
         query,
-        100,
+        requestedLimit,
       );
       for (const row of rows) yield mapTurn(row);
     }

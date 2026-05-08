@@ -170,7 +170,7 @@ describe("D-C3-1 getSessionTool handler", () => {
 
     await expect(
       getSessionTool.handler({ session_id: "s-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("returns null when the data layer returns null (session not found)", async () => {

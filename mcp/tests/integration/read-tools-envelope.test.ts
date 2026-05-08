@@ -110,7 +110,7 @@ describeIfReady("D-C13-4 captured-content envelope wrapping", () => {
   const assistantSentinel = `c13-asst-sentinel-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [{ id: sessionId, framework: "claude-code" }],
       turns: [

@@ -16,13 +16,6 @@
  * human-readable enum to the data-layer `DAY_<n>` token via
  * `toDataLayerPeriod` and forwarded as the second positional arg.
  *
- * TODO(plan-e): the data layer (`packages/recondo-data/src/cost.ts`
- * `getCostProjections`) currently ignores its `_period` parameter and
- * always returns a 30-day-trend projection. Tracked for Plan E.
- * The MCP description below reflects the current behavior (period is
- * reserved / not yet honored) so we don't promise period-awareness we
- * cannot deliver.
- *
  * `ctx.abortSignal` is threaded into the data-layer options.
  */
 
@@ -43,14 +36,13 @@ export const costProjectionsInputSchema = z.object(inputShape);
 export type CostProjectionsInput = z.infer<typeof costProjectionsInputSchema>;
 
 const DESCRIPTION =
-  "3-month forward cost projection based on the trailing 30-day " +
-  "trend. Returns `{ projections: [...] }` with three rows (one per " +
+  "3-month forward cost projection based on the selected trailing " +
+  "period. Returns `{ projections: [...] }` with three rows (one per " +
   "upcoming month) carrying `month` (YYYY-MM), `projectedSessions`, " +
   "`projectedTokens`, `projectedCostUsd`, `deltaVsCurrent`, and a " +
-  "human-readable `assumptions` string. v1: the optional `period` " +
-  "(day / week / month / quarter) parameter is reserved — the current " +
-  "data layer always projects from a 30-day trend window regardless " +
-  "of the value supplied.";
+  "human-readable `assumptions` string. Optional `period` (day / week " +
+  "/ month / quarter) selects the baseline window before scaling to a " +
+  "30-day month.";
 
 function authContextToApiKey(
   auth: AuthContext,

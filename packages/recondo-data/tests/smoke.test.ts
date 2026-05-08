@@ -26,6 +26,8 @@ describe("@recondo/data: public surface smoke (D-SM1)", () => {
     expect(typeof data.getPool).toBe("function");
     expect(typeof data.closePool).toBe("function");
     expect(typeof data.checkDatabaseHealth).toBe("function");
+    expect(Array.isArray(data.CAPTURED_TABLES)).toBe(true);
+    expect(typeof data.TABLE_TARGETS).toBe("object");
 
     // Auth
     expect(typeof data.authenticateApiKey).toBe("function");
@@ -69,6 +71,9 @@ describe("@recondo/data: public surface smoke (D-SM1)", () => {
     expect(typeof data.listDailySpend).toBe("function");
     expect(typeof data.getCostProjections).toBe("function");
     expect(typeof data.resolveDateRange).toBe("function");
+
+    // Insights
+    expect(typeof data.getInsights).toBe("function");
 
     // Audit
     expect(typeof data.listAuditEvents).toBe("function");
@@ -114,6 +119,7 @@ describe("@recondo/data: public surface smoke (D-SM1)", () => {
     expect(typeof data.listApiKeys).toBe("function");
     expect(typeof data.createApiKey).toBe("function");
     expect(typeof data.revokeApiKey).toBe("function");
+    expect(typeof data.mintScopedKey).toBe("function");
 
     // Structured query
     expect(typeof data.runStructuredQuery).toBe("function");

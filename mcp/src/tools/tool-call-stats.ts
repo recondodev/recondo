@@ -113,6 +113,7 @@ export const toolCallStatsTool: ReadTool<ToolCallStatsInput, unknown> = {
     const iterable = toolCallStats({
       group_by: input.group_by as ToolCallGroupBy,
       period,
+      projectId: input.project_id,
       signal: ctx.abortSignal,
     });
 

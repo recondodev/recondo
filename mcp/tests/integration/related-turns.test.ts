@@ -56,7 +56,7 @@ describeIfReady("D-C5-3 recondo_related_turns end-to-end", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -186,5 +186,69 @@ describeIfReady("D-C5-3 recondo_related_turns end-to-end", () => {
       const r = bad as CallToolResult;
       expect(r.isError).toBe(true);
     }
+  });
+
+  it("returns a usable next_offset that advances to new related turns", async () => {
+    const sessionId = randomUUID();
+    const turnIds = Array.from({ length: 8 }, () => randomUUID());
+
+    if (seeded) await seeded.cleanup();
+    seeded = await seedTestDb({
+      sessions: [{ id: sessionId, framework: "claude-code" }],
+      turns: turnIds.map((id, i) => ({
+        id,
+        sessionId,
+        sequenceNum: i + 1,
+        timestamp: `2026-05-07T00:00:0${i}.000Z`,
+        userRequestText: `related cursor ${i}`,
+      })),
+    });
+
+    const first = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_related_turns",
+      arguments: {
+        turn_id: turnIds[0],
+        relation: "same_session",
+        limit: 2,
+      },
+    });
+    expect(first.isError).not.toBe(true);
+    const env1 = extractEnvelope(first);
+    expect(env1.next_offset).toBe(2);
+    expect(env1.truncated).toBe(true);
+
+    const second = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_related_turns",
+      arguments: {
+        turn_id: turnIds[0],
+        relation: "same_session",
+        limit: 2,
+        offset: 2,
+      },
+    });
+    expect(second.isError).not.toBe(true);
+    const env2 = extractEnvelope(second);
+    const firstIds = new Set(
+      (env1.items as Array<{ turn_id: string }>).map((item) => item.turn_id),
+    );
+    const secondIds = (env2.items as Array<{ turn_id: string }>).map(
+      (item) => item.turn_id,
+    );
+    expect(secondIds.some((id) => firstIds.has(id))).toBe(false);
+
+    const final = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_related_turns",
+      arguments: {
+        turn_id: turnIds[0],
+        relation: "same_session",
+        limit: 2,
+        offset: 6,
+      },
+    });
+    expect(final.isError).not.toBe(true);
+    const env3 = extractEnvelope(final);
+    expect((env3.items as unknown[]).length).toBe(1);
+    expect(env3.next_offset).toBeNull();
+    expect(env3.truncated).toBe(false);
   });
 });

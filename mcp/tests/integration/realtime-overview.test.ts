@@ -63,7 +63,7 @@ describeIfReady("D-C6-1 recondo_realtime_overview end-to-end", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

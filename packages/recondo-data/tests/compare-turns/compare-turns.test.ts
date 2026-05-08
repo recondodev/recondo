@@ -289,6 +289,8 @@ describe("compareTurns — D-CT2 aspect subset", () => {
     expect(result.rows[0].aspect).toBe("cost");
     // values keyed by turn_id, in input order.
     expect(Object.keys(result.rows[0].values)).toEqual([t1, t2]);
+    expect(result.rows[0].sessionIds[t1]).toBe(sessionId);
+    expect(result.rows[0].sessionIds[t2]).toBe(sessionId);
   });
 });
 

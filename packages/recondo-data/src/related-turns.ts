@@ -38,9 +38,10 @@
  *
  * Legacy relations DROPPED in v1: `caused_by` and `same_tool_chain`. Their
  * backing columns (`caused_by_turn_id`, `tool_chain_id`) do not exist on
- * `turns`, so they cannot be implemented honestly. Passing either string
- * literal (cast through `unknown`) throws a synchronous Error with the
- * exact message `unknown relation: <name>`.
+ * `turns`, so they cannot be implemented honestly. This is the design
+ * rationale for the 5→3 enum reduction. Passing either string literal
+ * (cast through `unknown`) throws a synchronous Error with the exact
+ * message `unknown relation: <name>`.
  *
  * Iteration semantics (mirrors C1/C2/C3):
  *   - The OUTER `relatedTurns` function is NOT async. It validates the

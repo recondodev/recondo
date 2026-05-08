@@ -6,22 +6,25 @@
  * exits non-zero with an error to stderr for unsupported flavors / bad
  * flags).
  *
- * Per the C0 audit (Decision 3, Option A), `--scoped` is DROPPED in v1
- * — `parseFlags` rejects unknown flags, so `--scoped <project_id>`
- * causes a non-zero exit with an "Unknown flag" message on stderr.
+ * Hardening restores `--scoped <project_id>` as a first-class config
+ * option: the binary mints a scoped key and injects it into the emitted
+ * env as `RECONDO_API_KEY`.
  *
  * Skips when the binary isn't built. NOT gated on DATABASE_URL — the
- * config subcommand MUST be DB-free (it's a configuration emitter,
- * not a server).
+ * Normal config subcommands remain DB-free. The scoped variant is gated
+ * on DATABASE_URL because it intentionally mints a DB-backed key.
  */
 import { describe, it, expect } from "vitest";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 import { RECONDO_MCP_BINARY } from "../helpers/spawnMcp.js";
 
 const HAVE_BINARY = existsSync(RECONDO_MCP_BINARY);
+const HAVE_DB = Boolean(process.env.DATABASE_URL);
 const describeIfBinary = HAVE_BINARY ? describe : describe.skip;
+const describeIfBinaryAndDb = HAVE_BINARY && HAVE_DB ? describe : describe.skip;
 
 interface RunResult {
   code: number | null;
@@ -95,6 +98,31 @@ describeIfBinary("D-C12-1 recondo-mcp config claude-code (integration)", () => {
     expect(env.RECONDO_OBJECT_STORE_PATH).toBe("/var/recondo/objects");
     expect(env).not.toHaveProperty("RECONDO_API_KEY");
   });
+
+  it("can emit CLI args and propagated dev env", async () => {
+    const result = await runConfig(
+      ["config", "claude-code", "--emit-args", "--allow-actions"],
+      {
+        DATABASE_URL: "postgres://app:secret@db.example/recondo",
+        RECONDO_OBJECT_STORE_PATH: "/var/recondo/objects",
+        RECONDO_DEV_BYPASS: "1",
+        RECONDO_DATA_DIR: "/var/recondo/data",
+        RECONDO_OBJECTS: "/var/recondo/raw-objects",
+        NODE_ENV: "development",
+      },
+    );
+    expect(result.code, `stderr: ${result.stderr}`).toBe(0);
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      mcpServers: { recondo: { args: string[]; env: Record<string, string> } };
+    };
+    expect(parsed.mcpServers.recondo.args).toEqual(["--allow-actions"]);
+    expect(parsed.mcpServers.recondo.env).toMatchObject({
+      RECONDO_DEV_BYPASS: "1",
+      RECONDO_DATA_DIR: "/var/recondo/data",
+      RECONDO_OBJECTS: "/var/recondo/raw-objects",
+      NODE_ENV: "development",
+    });
+  });
 });
 
 describeIfBinary("D-C12-3 recondo-mcp config cursor (integration)", () => {
@@ -128,20 +156,34 @@ describeIfBinary("D-C12-3 recondo-mcp config goose (integration)", () => {
     expect(recondo.type).toBe("stdio");
     expect(recondo.cmd).toBe("recondo-mcp");
     expect(recondo).toHaveProperty("env");
+    expect(recondo).toHaveProperty("args");
+    expect(recondo).toMatchObject({ enabled: true, name: "recondo" });
   });
 });
 
-describeIfBinary("D-C12-2 [DROPPED] — `--scoped` is rejected", () => {
-  it("`config claude-code --scoped abc` exits non-zero with unknown-flag error", async () => {
-    const result = await runConfig(["config", "claude-code", "--scoped", "abc"]);
-    // parseFlags throws — main.ts catches and exits 1.
-    expect(result.code).not.toBe(0);
-    // stderr must mention the rejected flag (parseFlags throws
-    // `Unknown flag: --scoped`). We check substrings rather than the
-    // whole line because logger output may JSON-wrap.
-    expect(result.stderr.includes("--scoped")).toBe(true);
-    // stdout must NOT contain a registration JSON document.
-    expect(result.stdout.trim()).toBe("");
+describeIfBinaryAndDb("D-HARD scoped config — `--scoped` mints a key", () => {
+  it("`config claude-code --scoped my-project` emits a scoped API key exactly once", async () => {
+    const result = await runConfig(["config", "claude-code", "--scoped", "my-project"]);
+    expect(result.code, `stderr: ${result.stderr}`).toBe(0);
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      mcpServers: { recondo: { env: Record<string, string> } };
+    };
+    const rawSecret = parsed.mcpServers.recondo.env.RECONDO_API_KEY;
+    expect(rawSecret).toMatch(/^wrt_/);
+    expect(result.stdout.match(/RECONDO_API_KEY/g)?.length).toBe(1);
+
+    const { getPool } = await import("@recondo/data");
+    const keyHash = createHash("sha256").update(rawSecret).digest("hex");
+    const pool = getPool();
+    const row = await pool.query(
+      `SELECT id, project_id, scope FROM api_keys WHERE key_hash = $1`,
+      [keyHash],
+    );
+    expect(row.rows[0]).toMatchObject({
+      project_id: "my-project",
+      scope: "scoped",
+    });
+    await pool.query(`DELETE FROM api_keys WHERE key_hash = $1`, [keyHash]);
   });
 });
 

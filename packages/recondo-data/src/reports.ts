@@ -26,6 +26,9 @@ import crypto from "node:crypto";
 import { getPool } from "./pool.js";
 import { uniformListEnvelope } from "./envelope.js";
 import { formatTimestamp } from "./mappers.js";
+import { getUsageSummary, listSpendByProvider } from "./cost.js";
+import { getComplianceSummary } from "./compliance.js";
+import { listAnomalies } from "./anomalies.js";
 import type { ApiKeyInfo, ListEnvelope, ListOptions, QueryOptions } from "./types.js";
 
 export interface ReportFindings {
@@ -58,10 +61,20 @@ export interface TrendPoint {
   value: number;
 }
 
+export type GenerateReportType =
+  | "weekly_cost"
+  | "compliance"
+  | "anomaly"
+  | "custom";
+
+export type GenerateReportPeriod = "week" | "month";
+
 export interface GenerateReportInput {
-  framework: string;
-  periodStart: string;
-  periodEnd: string;
+  type: GenerateReportType;
+  period: GenerateReportPeriod;
+  from?: string;
+  to?: string;
+  params?: Record<string, unknown>;
 }
 
 export interface GenerateReportError {
@@ -185,46 +198,173 @@ export async function getReport(
 }
 
 export async function listReportCoverageTrend(
-  _apiKey: ApiKeyInfo,
+  apiKey: ApiKeyInfo,
   _args: Record<string, never> = {},
-  options: QueryOptions = {},
-): Promise<ListEnvelope<TrendPoint>> {
+  options: ListOptions = {},
+): Promise<ListEnvelope<TrendPoint> & { total: number; limit: number; offset: number }> {
   if (options.signal?.aborted) {
     throw new DOMException("aborted", "AbortError");
   }
   const pool = getPool();
-  const result = await pool.query(
-    `SELECT label, value
-     FROM report_coverage
-     ORDER BY recorded_at ASC`,
-  );
+
+  let limit = options.limit ?? 50;
+  let offset = options.offset ?? 0;
+  if (limit < 1) limit = 1;
+  if (limit > 500) limit = 500;
+  if (offset < 0) offset = 0;
+
+  const params: unknown[] = [];
+  const projectJoin = apiKey.projectId
+    ? "JOIN reports r ON r.id = rc.report_id"
+    : "";
+  const projectWhere = apiKey.projectId ? "WHERE r.project_id = $1" : "";
+  if (apiKey.projectId) params.push(apiKey.projectId);
+  const countParams = [...params];
+  const limitIdx = params.length + 1;
+  const offsetIdx = params.length + 2;
+  params.push(limit, offset);
+
+  const [result, countResult] = await Promise.all([
+    pool.query(
+      `SELECT rc.label, rc.value
+       FROM report_coverage rc
+       ${projectJoin}
+       ${projectWhere}
+       ORDER BY rc.recorded_at ASC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params,
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM report_coverage rc
+       ${projectJoin}
+       ${projectWhere}`,
+      countParams,
+    ),
+  ]);
+  const total = (countResult.rows[0]?.total as number) ?? 0;
   const items: TrendPoint[] = result.rows.map((row: Record<string, unknown>) => ({
     label: row.label as string,
     value: Number(row.value) || 0,
   }));
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  const truncated = offset + items.length < total;
+  const nextOffset = truncated ? offset + items.length : null;
+  return {
+    ...uniformListEnvelope(items, { nextOffset, truncated }),
+    total,
+    limit,
+    offset,
+  };
 }
 
 export async function listReportFindingsTrend(
-  _apiKey: ApiKeyInfo,
+  apiKey: ApiKeyInfo,
   _args: Record<string, never> = {},
-  options: QueryOptions = {},
-): Promise<ListEnvelope<TrendPoint>> {
+  options: ListOptions = {},
+): Promise<ListEnvelope<TrendPoint> & { total: number; limit: number; offset: number }> {
   if (options.signal?.aborted) {
     throw new DOMException("aborted", "AbortError");
   }
   const pool = getPool();
-  const result = await pool.query(
-    `SELECT name AS label,
-            (findings_critical + findings_high + findings_medium + findings_low) AS value
-     FROM reports
-     ORDER BY generated_at ASC`,
-  );
+
+  let limit = options.limit ?? 50;
+  let offset = options.offset ?? 0;
+  if (limit < 1) limit = 1;
+  if (limit > 500) limit = 500;
+  if (offset < 0) offset = 0;
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (apiKey.projectId) {
+    conditions.push("project_id = $1");
+    params.push(apiKey.projectId);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countParams = [...params];
+  const limitIdx = params.length + 1;
+  const offsetIdx = params.length + 2;
+  params.push(limit, offset);
+
+  const [result, countResult] = await Promise.all([
+    pool.query(
+      `SELECT name AS label,
+              (findings_critical + findings_high + findings_medium + findings_low) AS value
+       FROM reports
+       ${where}
+       ORDER BY generated_at ASC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params,
+    ),
+    pool.query(`SELECT COUNT(*)::int AS total FROM reports ${where}`, countParams),
+  ]);
+  const total = (countResult.rows[0]?.total as number) ?? 0;
   const items: TrendPoint[] = result.rows.map((row: Record<string, unknown>) => ({
     label: row.label as string,
     value: Number(row.value) || 0,
   }));
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  const truncated = offset + items.length < total;
+  const nextOffset = truncated ? offset + items.length : null;
+  return {
+    ...uniformListEnvelope(items, { nextOffset, truncated }),
+    total,
+    limit,
+    offset,
+  };
+}
+
+function resolveReportDateRange(input: GenerateReportInput): {
+  startDate: Date;
+  endDate: Date;
+} {
+  const days = input.period === "week" ? 7 : 30;
+  const endDate = input.to ? new Date(input.to) : new Date();
+  const startDate = input.from
+    ? new Date(input.from)
+    : new Date(endDate.getTime() - days * 86_400_000);
+  return { startDate, endDate };
+}
+
+function toCostPeriod(period: GenerateReportPeriod): string {
+  return period === "week" ? "DAY_7" : "DAY_30";
+}
+
+async function buildReportEvidence(
+  apiKey: ApiKeyInfo,
+  input: GenerateReportInput,
+  startDate: Date,
+  endDate: Date,
+  options: QueryOptions,
+): Promise<Record<string, unknown>> {
+  switch (input.type) {
+    case "weekly_cost": {
+      const args = {
+        period: toCostPeriod(input.period),
+        from: startDate.toISOString(),
+        to: endDate.toISOString(),
+      };
+      const [summary, spendByProvider] = await Promise.all([
+        getUsageSummary(apiKey, args, options),
+        listSpendByProvider(apiKey, args, { ...options, limit: 20 }),
+      ]);
+      return { summary, spendByProvider };
+    }
+    case "compliance": {
+      const summary = await getComplianceSummary(apiKey, options);
+      return { summary };
+    }
+    case "anomaly": {
+      const anomalies = await listAnomalies(
+        apiKey,
+        { since: startDate.toISOString() },
+        { ...options, limit: 100 },
+      );
+      return { anomalies };
+    }
+    case "custom":
+      return { params: input.params ?? {} };
+    default:
+      return { params: input.params ?? {} };
+  }
 }
 
 export async function generateReport(
@@ -236,19 +376,16 @@ export async function generateReport(
     throw new DOMException("aborted", "AbortError");
   }
   const pool = getPool();
-  const { framework, periodStart, periodEnd } = input;
-
-  const startDate = new Date(periodStart);
-  const endDate = new Date(periodEnd);
+  const { startDate, endDate } = resolveReportDateRange(input);
 
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     return {
       report: null,
       errors: [
         {
-          field: "periodStart",
+          field: "from",
           code: "INVALID",
-          message: "Invalid date format for periodStart or periodEnd",
+          message: "Invalid date format for from or to",
         },
       ],
     };
@@ -259,34 +396,64 @@ export async function generateReport(
       report: null,
       errors: [
         {
-          field: "periodStart",
+          field: "from",
           code: "INVALID_RANGE",
-          message: "periodStart must be before periodEnd",
+          message: "from must be before to",
         },
       ],
     };
   }
 
+  const evidence = await buildReportEvidence(
+    apiKey,
+    input,
+    startDate,
+    endDate,
+    options,
+  );
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
+    const turnProjectJoin = apiKey.projectId
+      ? "JOIN sessions s ON s.id = t.session_id"
+      : "";
+    const turnProjectClause = apiKey.projectId ? "AND s.project_id = $3" : "";
+    const turnParams = apiKey.projectId
+      ? [startDate.toISOString(), endDate.toISOString(), apiKey.projectId]
+      : [startDate.toISOString(), endDate.toISOString()];
+
     const turnCountResult = await client.query(
       `SELECT COUNT(*)::int AS capture_count
-       FROM turns
-       WHERE timestamp::timestamptz >= $1::timestamptz
-         AND timestamp::timestamptz <= $2::timestamptz`,
-      [startDate.toISOString(), endDate.toISOString()],
+       FROM turns t
+       ${turnProjectJoin}
+       WHERE t.timestamp::timestamptz >= $1::timestamptz
+         AND t.timestamp::timestamptz <= $2::timestamptz
+         ${turnProjectClause}`,
+      turnParams,
     );
     const captureCount = (turnCountResult.rows[0]?.capture_count as number) ?? 0;
 
+    const findingsProjectJoin = apiKey.projectId
+      ? "LEFT JOIN sessions s ON s.id = a.session_id"
+      : "";
+    const findingsProjectClause = apiKey.projectId
+      ? "AND s.project_id = $3"
+      : "";
+    const findingsParams = apiKey.projectId
+      ? [startDate.toISOString(), endDate.toISOString(), apiKey.projectId]
+      : [startDate.toISOString(), endDate.toISOString()];
+
     const findingsResult = await client.query(
       `SELECT severity, COUNT(*)::int AS cnt
-       FROM anomaly_events
-       WHERE detected_at::TIMESTAMPTZ >= $1::timestamptz
-         AND detected_at::TIMESTAMPTZ <= $2::timestamptz
+       FROM anomaly_events a
+       ${findingsProjectJoin}
+       WHERE a.detected_at::TIMESTAMPTZ >= $1::timestamptz
+         AND a.detected_at::TIMESTAMPTZ <= $2::timestamptz
+         ${findingsProjectClause}
        GROUP BY severity`,
-      [startDate.toISOString(), endDate.toISOString()],
+      findingsParams,
     );
 
     let findingsCritical = 0;
@@ -303,14 +470,18 @@ export async function generateReport(
     }
 
     const reportId = crypto.randomUUID();
-    const reportName = `${framework} Report`;
+    const framework = input.type;
+    const reportName = `${input.type} ${input.period} Report`;
     const now = new Date();
 
     const reportContent = JSON.stringify({
-      framework,
+      type: input.type,
+      period: input.period,
       periodStart: startDate.toISOString(),
       periodEnd: endDate.toISOString(),
+      params: input.params ?? {},
       captureCount,
+      evidence,
     });
     const hash = crypto.createHash("sha256").update(reportContent).digest("hex");
 

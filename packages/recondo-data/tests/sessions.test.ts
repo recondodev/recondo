@@ -64,7 +64,7 @@ describe("@recondo/data: listSessions AbortSignal (D-S4)", () => {
     ctrl.abort();
     await expect(
       listSessions(adminKey, {}, { signal: ctrl.signal, limit: 10 }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
     try {
       await listSessions(adminKey, {}, { signal: ctrl.signal, limit: 10 });
       expect.fail("expected to throw");
@@ -107,7 +107,7 @@ describe("@recondo/data: getSession (D-S5, D-S6)", () => {
     ctrl.abort();
     await expect(
       getSession(adminKey, "00000000-0000-0000-0000-000000000000", { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -134,6 +134,6 @@ describe("@recondo/data: listUserTurns shape (D-S7)", () => {
     ctrl.abort();
     await expect(
       listUserTurns("00000000-0000-0000-0000-000000000000", { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

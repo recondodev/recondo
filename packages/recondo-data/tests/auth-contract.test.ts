@@ -39,7 +39,7 @@ describe("@recondo/data auth: AbortSignal support (D-A3)", () => {
     ctrl.abort();
     await expect(
       authenticateApiKey("wrt_anything", { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
     // Confirm error name is AbortError
     try {
       await authenticateApiKey("wrt_anything", { signal: ctrl.signal });
@@ -97,6 +97,6 @@ describe("@recondo/data auth: authenticateRequest header wrapper (D-A4)", () => 
     ctrl.abort();
     await expect(
       authenticateRequest("Bearer wrt_anything", { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

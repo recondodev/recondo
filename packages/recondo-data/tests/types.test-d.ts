@@ -30,6 +30,7 @@ import {
   listSpendByFramework,
   listDailySpend,
   getCostProjections,
+  getInsights,
   // Audit
   listAuditEvents,
   // Compliance
@@ -43,10 +44,15 @@ import {
   // Reports
   listReports,
   getReport,
+  listReportCoverageTrend,
+  listReportFindingsTrend,
   generateReport,
+  type GenerateReportInput,
   // Policies
   listPolicies,
   getPolicy,
+  listPolicyTriggerHistory,
+  type PolicyFilter,
   createPolicy,
   updatePolicy,
   deletePolicy,
@@ -54,6 +60,7 @@ import {
   listApiKeys,
   createApiKey,
   revokeApiKey,
+  mintScopedKey,
   // Structured query
   runStructuredQuery,
   listStructuredSessions,
@@ -109,6 +116,7 @@ expectTypeOf(listSpendByModel).parameter(2).toMatchTypeOf<{ signal?: AbortSignal
 expectTypeOf(listSpendByFramework).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(listDailySpend).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(getCostProjections).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+expectTypeOf(getInsights).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 
 // realtime
 expectTypeOf(getRealtimeStats).parameter(1).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
@@ -121,6 +129,8 @@ expectTypeOf(listAgentActivity).parameter(2).toMatchTypeOf<{ signal?: AbortSigna
 // reports
 expectTypeOf(listReports).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(getReport).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+expectTypeOf(listReportCoverageTrend).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+expectTypeOf(listReportFindingsTrend).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(generateReport).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 
 // policies
@@ -134,6 +144,7 @@ expectTypeOf(deletePolicy).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } |
 expectTypeOf(listApiKeys).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(createApiKey).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 expectTypeOf(revokeApiKey).parameter(2).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
+expectTypeOf(mintScopedKey).parameter(1).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
 
 // structured query
 expectTypeOf(runStructuredQuery).parameter(5).toMatchTypeOf<{ signal?: AbortSignal } | undefined>();
@@ -197,11 +208,25 @@ expectTypeOf<ToolCallPeriod>().toEqualTypeOf<"24h" | "7d" | "30d" | "all">();
 expectTypeOf(toolCallStats).parameter(0).toMatchTypeOf<{
   group_by: ToolCallGroupBy;
   period: ToolCallPeriod;
+  projectId?: string | null;
   signal?: AbortSignal;
 }>();
 
 // Return type is AsyncIterable<ToolCallStatsRow> (NOT Promise<Row[]>).
 expectTypeOf(toolCallStats).returns.toMatchTypeOf<AsyncIterable<ToolCallStatsRow>>();
+
+expectTypeOf<GenerateReportInput>().toMatchTypeOf<{
+  type: "weekly_cost" | "compliance" | "anomaly" | "custom";
+  period: "week" | "month";
+  from?: string;
+  to?: string;
+  params?: Record<string, unknown>;
+}>();
+
+expectTypeOf<PolicyFilter>().toMatchTypeOf<{ policyId?: string }>();
+expectTypeOf(listPolicyTriggerHistory).parameter(1).toMatchTypeOf<
+  { days?: number; policyId?: string } | undefined
+>();
 
 // ---------------------------------------------------------------------------
 // C7 D-CT-SCALAR: scalar Promise-returning ops accept `{ signal?: AbortSignal }`.

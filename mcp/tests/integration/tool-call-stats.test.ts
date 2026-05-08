@@ -73,7 +73,7 @@ describeIfReady("D-C7-4 recondo_tool_call_stats schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -111,7 +111,7 @@ describeIfReady("D-C7-4 recondo_tool_call_stats integration — all 3 group_by v
   const toolName = "ReadIntegration";
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [
         {
@@ -265,7 +265,7 @@ describeIfReady("D-C7-4 recondo_tool_call_stats integration — pagination (limi
   const turnId = randomUUID();
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     // Seed 15 distinct tool names so group_by=tool_name produces 15
     // rows. Each gets a single call with a fixed duration so the
     // ordering is deterministic across runs.

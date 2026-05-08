@@ -1,8 +1,7 @@
 /**
  * D-C11 (unit) — Catalog parity lint logic.
  *
- * Phase 1 (name parity only) — action-immutability is DEFERRED to
- * Phase 2 / D-C13-8 (row-count hashing integration test).
+ * Phase 2 adds action-immutability checks using TABLE_TARGETS.
  *
  * The implementer MUST replace `mcp/src/scripts/catalog-parity-lint.ts`
  * (currently a no-op stub from C1) with a real implementation that
@@ -10,7 +9,8 @@
  *
  *   export interface LintResult {
  *     violations: Array<{
- *       kind: "uncovered_export" | "phantom_mapping" | "phantom_opt_out";
+ *       kind: "uncovered_export" | "phantom_mapping" | "phantom_opt_out"
+ *           | "missing_table_targets" | "action_writes_captured_table";
  *       export: string;
  *       message: string;
  *     }>;
@@ -20,6 +20,7 @@
  *   // dispatches to multiple data-layer fns, e.g. recondo_spend → 4 fns).
  *   export const READ_TOOL_TO_DATA_FN: Record<string, string | string[]>;
  *   export const ACTION_TOOL_TO_DATA_FN: Record<string, string>;
+ *   export const CLI_TO_DATA_FN: Record<string, string>;
  *
  *   // Internal @recondo/data exports the parity lint deliberately does
  *   // NOT surface as MCP tools. Each entry's value is a one-line
@@ -31,16 +32,19 @@
  *     dataExports?: ReadonlyArray<string>;
  *     readMap?: Record<string, string | string[]>;
  *     actionMap?: Record<string, string>;
+ *     cliMap?: Record<string, string>;
  *     optOuts?: Record<string, string>;
+ *     tableTargets?: Record<string, readonly string[]>;
+ *     capturedTables?: ReadonlyArray<string>;
  *   }): LintResult;
  *
- * The lint runs three checks against the union of `READ_TOOL_TO_DATA_FN`
- * values, `ACTION_TOOL_TO_DATA_FN` values, and `READ_OPT_OUTS` keys:
+ * The lint checks parity plus action-table safety:
  *
  *   1. uncovered_export — an @recondo/data export not in any of the three.
  *   2. phantom_mapping  — a tool's mapping points to a non-existent export.
  *   3. phantom_opt_out  — an opt-out entry that IS already covered by a
  *                          tool mapping (redundant; should be removed).
+ *   4. missing_table_targets/action_writes_captured_table for actions.
  */
 import { describe, it, expect } from "vitest";
 import * as data from "@recondo/data";
@@ -48,6 +52,7 @@ import * as data from "@recondo/data";
 import {
   READ_TOOL_TO_DATA_FN,
   ACTION_TOOL_TO_DATA_FN,
+  CLI_TO_DATA_FN,
   READ_OPT_OUTS,
   runLint,
   type LintResult,
@@ -65,8 +70,8 @@ function flatReadValues(): string[] {
 }
 
 describe("D-C11 READ_TOOL_TO_DATA_FN map", () => {
-  it("has exactly 27 entries (one per read tool)", () => {
-    expect(Object.keys(READ_TOOL_TO_DATA_FN).length).toBe(27);
+  it("has exactly 28 entries (one per read tool)", () => {
+    expect(Object.keys(READ_TOOL_TO_DATA_FN).length).toBe(28);
   });
 
   it("uses RIGHT-column @recondo/data export names verbatim", () => {
@@ -122,6 +127,7 @@ describe("D-C11 READ_TOOL_TO_DATA_FN map", () => {
         "listReportCoverageTrend",
         "listReportFindingsTrend",
       ],
+      recondo_insights: "getInsights",
       recondo_policies: ["listPolicies", "listPolicyTriggerHistory"],
       recondo_registered_keys: "listApiKeys",
     };
@@ -139,8 +145,11 @@ describe("D-C11 READ_TOOL_TO_DATA_FN map", () => {
     }
   });
 
-  it("does NOT include the dropped insights entry", () => {
-    expect(READ_TOOL_TO_DATA_FN).not.toHaveProperty("recondo_insights");
+  it("includes the restored insights entry", () => {
+    expect(READ_TOOL_TO_DATA_FN).toHaveProperty(
+      "recondo_insights",
+      "getInsights",
+    );
   });
 });
 
@@ -174,6 +183,14 @@ describe("D-C11 ACTION_TOOL_TO_DATA_FN map", () => {
   });
 });
 
+describe("D-HARD CLI_TO_DATA_FN map", () => {
+  it("covers mintScopedKey without treating it as an MCP tool opt-out", () => {
+    expect(CLI_TO_DATA_FN["recondo-mcp config --scoped"]).toBe("mintScopedKey");
+    expect(DATA_EXPORTS.has("mintScopedKey")).toBe(true);
+    expect(READ_OPT_OUTS).not.toHaveProperty("mintScopedKey");
+  });
+});
+
 describe("D-C11 READ_OPT_OUTS", () => {
   it("is a Record<string, string> with non-empty rationales", () => {
     expect(READ_OPT_OUTS).toBeDefined();
@@ -201,6 +218,7 @@ describe("D-C11 READ_OPT_OUTS", () => {
     const covered = new Set<string>([
       ...flatReadValues(),
       ...Object.values(ACTION_TOOL_TO_DATA_FN),
+      ...Object.values(CLI_TO_DATA_FN),
     ]);
     for (const name of Object.keys(READ_OPT_OUTS)) {
       expect(
@@ -251,10 +269,11 @@ describe("D-C11 runLint() — parity holds", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("union of (read map values, action map values, opt-out keys) covers every @recondo/data export", () => {
+  it("union of (read map values, action map values, CLI map values, opt-out keys) covers every @recondo/data export", () => {
     const covered = new Set<string>([
       ...flatReadValues(),
       ...Object.values(ACTION_TOOL_TO_DATA_FN),
+      ...Object.values(CLI_TO_DATA_FN),
       ...Object.keys(READ_OPT_OUTS),
     ]);
     const missing = [...DATA_EXPORTS].filter((name) => !covered.has(name));
@@ -271,6 +290,7 @@ describe("D-C11 runLint() — violation cases", () => {
       dataExports: ["listSessions", "ghostExport"],
       readMap: { recondo_list_sessions: "listSessions" },
       actionMap: {},
+      cliMap: {},
       optOuts: {},
     });
     const kinds = result.violations.map((v) => v.kind);
@@ -285,6 +305,7 @@ describe("D-C11 runLint() — violation cases", () => {
       dataExports: ["listSessions"],
       readMap: { recondo_list_sessions: "doesNotExist" },
       actionMap: {},
+      cliMap: {},
       optOuts: { listSessions: "covered" },
     });
     const kinds = result.violations.map((v) => v.kind);
@@ -298,6 +319,7 @@ describe("D-C11 runLint() — violation cases", () => {
       dataExports: ["createPolicy"],
       readMap: {},
       actionMap: { recondo_create_policy: "createPolicyButTypo" },
+      cliMap: {},
       optOuts: { createPolicy: "covered" },
     });
     const kinds = result.violations.map((v) => v.kind);
@@ -311,6 +333,7 @@ describe("D-C11 runLint() — violation cases", () => {
       dataExports: ["listSessions"],
       readMap: { recondo_list_sessions: "listSessions" },
       actionMap: {},
+      cliMap: {},
       optOuts: { listSessions: "redundant — already covered by read map" },
     });
     const kinds = result.violations.map((v) => v.kind);
@@ -324,6 +347,7 @@ describe("D-C11 runLint() — violation cases", () => {
       dataExports: ["listSessions"],
       readMap: {},
       actionMap: {},
+      cliMap: {},
       optOuts: { listSessions: "out of scope" },
     });
     expect(result).toHaveProperty("violations");
@@ -341,11 +365,42 @@ describe("D-C11 runLint() — violation cases", () => {
         ],
       },
       actionMap: {},
+      cliMap: {},
       optOuts: {},
     });
     const phantoms = result.violations
       .filter((v) => v.kind === "phantom_mapping")
       .map((v) => v.export);
     expect(phantoms).toContain("listSpendByModelTYPO");
+  });
+
+  it("action_writes_captured_table: action map target writes a captured table", () => {
+    const result = runLint({
+      dataExports: ["dangerousAction"],
+      readMap: {},
+      actionMap: { recondo_danger: "dangerousAction" },
+      cliMap: {},
+      optOuts: {},
+      tableTargets: { dangerousAction: ["turns"] },
+      capturedTables: ["turns"],
+    });
+    const v = result.violations.find(
+      (x) => x.kind === "action_writes_captured_table",
+    );
+    expect(v?.export).toBe("dangerousAction");
+  });
+
+  it("missing_table_targets: action map target has no table metadata", () => {
+    const result = runLint({
+      dataExports: ["createPolicy"],
+      readMap: {},
+      actionMap: { recondo_create_policy: "createPolicy" },
+      cliMap: {},
+      optOuts: {},
+      tableTargets: {},
+      capturedTables: ["turns"],
+    });
+    const v = result.violations.find((x) => x.kind === "missing_table_targets");
+    expect(v?.export).toBe("createPolicy");
   });
 });

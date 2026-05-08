@@ -123,8 +123,20 @@ describe("D-C8-6 reportTrendsInputSchema", () => {
     const parsed = reportTrendsInputSchema.parse({
       metric: "coverage",
       project_id: "proj-1",
-    }) as { project_id?: string };
+    }) as { project_id?: string; limit?: number; offset?: number };
     expect(parsed.project_id).toBe("proj-1");
+    expect(parsed.limit).toBe(20);
+    expect(parsed.offset).toBe(0);
+  });
+
+  it("schema accepts limit and offset", () => {
+    const parsed = reportTrendsInputSchema.parse({
+      metric: "coverage",
+      limit: 5,
+      offset: 10,
+    }) as { limit?: number; offset?: number };
+    expect(parsed.limit).toBe(5);
+    expect(parsed.offset).toBe(10);
   });
 });
 
@@ -194,6 +206,21 @@ describe("D-C8-6 reportTrendsTool handler — signal threading + project_id over
     expect(opts.signal).toBe(ac.signal);
   });
 
+  it("forwards limit and offset to the coverage call", async () => {
+    listReportCoverageTrend.mockResolvedValueOnce(envelopeWith([]));
+    const ctx = makeCtx();
+    await reportTrendsTool.handler(
+      { metric: "coverage", limit: 7, offset: 14 } as never,
+      ctx,
+    );
+    const opts = listReportCoverageTrend.mock.calls[0][2] as {
+      limit?: number;
+      offset?: number;
+    };
+    expect(opts.limit).toBe(7);
+    expect(opts.offset).toBe(14);
+  });
+
   it("threads ctx.abortSignal into the findings call", async () => {
     listReportFindingsTrend.mockResolvedValueOnce(envelopeWith([]));
     const ac = new AbortController();
@@ -232,7 +259,7 @@ describe("D-C8-6 reportTrendsTool handler — signal threading + project_id over
     const ctx = makeCtx({ abortSignal: ac.signal });
     await expect(
       reportTrendsTool.handler({ metric: "findings" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

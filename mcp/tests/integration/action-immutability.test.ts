@@ -10,12 +10,8 @@
  * tables remain byte-identical regardless of action-tool outcome).
  * Re-fingerprint and assert UNCHANGED.
  *
- * Why row-count + table-name fingerprinting (not full content hash):
- * the data layer's read paths may legitimately update non-captured
- * tables (e.g. usage_aggregates, policies, reports). The row-count
- * fingerprint covers the captured-bytes tables that are protected by
- * the GDPR triggers. Those rows must be append-only as far as action
- * tools are concerned.
+ * The fingerprint includes count + stable row ids for each captured
+ * table, so a delete/reinsert at the same row count is still detected.
  *
  * Preconditions: `just dev-infra` running + `just api-migrate` applied
  * + the mcp build is fresh.
@@ -43,17 +39,30 @@ interface CallToolResult {
 
 const CAPTURED_TABLES = ["turns", "tool_calls", "sessions", "attachments"] as const;
 
-async function fingerprintCapturedTables(): Promise<string> {
+interface CapturedTableFingerprint {
+  hash: string;
+  parts: string[];
+}
+
+async function fingerprintCapturedTables(): Promise<CapturedTableFingerprint> {
   const { getPool } = await import("@recondo/data");
   const pool = getPool();
   const parts: string[] = [];
   for (const tableName of CAPTURED_TABLES) {
-    const r = await pool.query(`SELECT COUNT(*)::bigint AS c FROM ${tableName}`);
+    const r = await pool.query(
+      `SELECT COUNT(*)::bigint AS c,
+              COALESCE(md5(string_agg(id::text, ',' ORDER BY id::text)), md5('')) AS id_hash
+       FROM ${tableName}`,
+    );
     const count = Number(r.rows[0]?.c ?? 0);
-    parts.push(`${tableName}:${count}`);
+    const idHash = String(r.rows[0]?.id_hash ?? "");
+    parts.push(`${tableName}:${count}:${idHash}`);
   }
   const joined = parts.join("|");
-  return createHash("sha256").update(joined).digest("hex");
+  return {
+    hash: createHash("sha256").update(joined).digest("hex"),
+    parts,
+  };
 }
 
 describeIfReady("D-C13-8 action tools never mutate captured tables", () => {
@@ -61,7 +70,7 @@ describeIfReady("D-C13-8 action tools never mutate captured tables", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions", "--allow-destructive"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions", "--allow-destructive"] });
     // Seed enough captured rows that the fingerprint is non-trivial.
     const sessionId = randomUUID();
     seeded = await seedTestDb({
@@ -99,9 +108,10 @@ describeIfReady("D-C13-8 action tools never mutate captured tables", () => {
       [
         "recondo_generate_report",
         {
-          framework: "soc2",
-          period_start: "2026-01-01T00:00:00Z",
-          period_end: "2026-04-01T00:00:00Z",
+          type: "weekly_cost",
+          period: "week",
+          from: "2026-01-01T00:00:00Z",
+          to: "2026-04-01T00:00:00Z",
           project_id: fakeProjectId,
         },
       ],
@@ -109,7 +119,7 @@ describeIfReady("D-C13-8 action tools never mutate captured tables", () => {
         "recondo_update_control_status",
         {
           control_id: fakeControlId,
-          new_status: "PASSING",
+          new_status: "compliant",
           reason: "c13-test",
         },
       ],
@@ -159,8 +169,12 @@ describeIfReady("D-C13-8 action tools never mutate captured tables", () => {
 
     const after = await fingerprintCapturedTables();
     expect(
-      after,
-      `captured-table fingerprint changed: before=${before} after=${after}`,
-    ).toBe(before);
+      after.hash,
+      [
+        `captured-table fingerprint changed: before=${before.hash} after=${after.hash}`,
+        `before_parts=${before.parts.join("|")}`,
+        `after_parts=${after.parts.join("|")}`,
+      ].join(" "),
+    ).toBe(before.hash);
   });
 });

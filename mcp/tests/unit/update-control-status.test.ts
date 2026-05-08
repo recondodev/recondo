@@ -8,7 +8,8 @@
  *   - Input shape (data-layer signature: `updateControlStatus(apiKey, input, options)`,
  *     where input is `UpdateControlInput { controlId, status, reason }`):
  *       control_id: string
- *       new_status: string  (mapped to `status` on the data-layer input)
+ *       new_status: enum compliant / non_compliant / in_review
+ *                   (mapped to `status` on the data-layer input)
  *       reason?:    string  (data-layer enforces required+non-empty; tool may default to "")
  *       project_id?: string
  *
@@ -71,7 +72,7 @@ const samplePayload = {
     frameworkId: "soc2",
     controlId: "CC1.1",
     description: "control desc",
-    status: "PASSING",
+    status: "compliant",
   },
   errors: [],
 };
@@ -96,16 +97,37 @@ describe("D-C10-2 updateControlStatusInputSchema", () => {
     expect(() =>
       updateControlStatusInputSchema.parse({
         control_id: "ctrl-1",
-        new_status: "PASSING",
+        new_status: "compliant",
         reason: "remediation complete",
       }),
     ).not.toThrow();
   });
 
+  it("accepts only compliant / non_compliant / in_review statuses", () => {
+    for (const new_status of [
+      "compliant",
+      "non_compliant",
+      "in_review",
+    ] as const) {
+      expect(() =>
+        updateControlStatusInputSchema.parse({
+          control_id: "ctrl-1",
+          new_status,
+        }),
+      ).not.toThrow();
+    }
+    expect(() =>
+      updateControlStatusInputSchema.parse({
+        control_id: "ctrl-1",
+        new_status: "compliantz",
+      }),
+    ).toThrow();
+  });
+
   it("rejects missing control_id", () => {
     expect(() =>
       updateControlStatusInputSchema.parse({
-        new_status: "PASSING",
+        new_status: "compliant",
       } as never),
     ).toThrow();
   });
@@ -130,7 +152,7 @@ describe("D-C10-2 updateControlStatusTool handler", () => {
     await updateControlStatusTool.handler(
       {
         control_id: "ctrl-1",
-        new_status: "PASSING",
+        new_status: "compliant",
         reason: "fixed",
       } as never,
       ctx,
@@ -144,7 +166,7 @@ describe("D-C10-2 updateControlStatusTool handler", () => {
     await updateControlStatusTool.handler(
       {
         control_id: "ctrl-42",
-        new_status: "FAILING",
+        new_status: "non_compliant",
         reason: "evidence missing",
       } as never,
       ctx,
@@ -152,7 +174,7 @@ describe("D-C10-2 updateControlStatusTool handler", () => {
     const [, input] = updateControlStatus.mock.calls[0];
     const i = input as { controlId: string; status: string; reason: string };
     expect(i.controlId).toBe("ctrl-42");
-    expect(i.status).toBe("FAILING");
+    expect(i.status).toBe("non_compliant");
     expect(i.reason).toBe("evidence missing");
   });
 
@@ -163,7 +185,7 @@ describe("D-C10-2 updateControlStatusTool handler", () => {
     await updateControlStatusTool.handler(
       {
         control_id: "ctrl-1",
-        new_status: "PASSING",
+        new_status: "compliant",
         reason: "ok",
       } as never,
       ctx,
@@ -179,7 +201,7 @@ describe("D-C10-2 updateControlStatusTool handler", () => {
     const result = await updateControlStatusTool.handler(
       {
         control_id: "ctrl-1",
-        new_status: "PASSING",
+        new_status: "compliant",
         reason: "ok",
       } as never,
       ctx,

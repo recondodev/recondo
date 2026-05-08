@@ -24,14 +24,16 @@ import { listRealtimeFeed } from "@recondo/data";
 import type { ApiKeyInfo, RealtimeFeedItem, RealtimeFeedArgs } from "@recondo/data";
 import { z } from "zod";
 
-import { buildListEnvelope } from "../envelope/list.js";
 import {
   buildMessageEnvelope,
   type MessageEnvelope,
 } from "../envelope/messages.js";
-import { enforceListBudget } from "../envelope/truncate.js";
 import type { AuthContext } from "../auth/context.js";
 import type { ReadTool } from "../registry/types.js";
+import {
+  buildBudgetedOffsetEnvelope,
+  collectOffsetPage,
+} from "./pagination.js";
 
 const inputShape = {
   since: z.string().optional(),
@@ -133,25 +135,17 @@ export const realtimeFeedTool: ReadTool<RealtimeFeedInput, unknown> = {
     if (input.since !== undefined) args.since = input.since;
 
     const iterable = listRealtimeFeed(apiKey, args, {
-      limit,
-      offset,
+      limit: offset + limit + 1,
+      offset: 0,
       signal: ctx.abortSignal,
     });
 
-    const items: FeedItemOut[] = [];
-    for await (const item of iterable) {
-      if (ctx.abortSignal?.aborted) {
-        throw new DOMException("aborted", "AbortError");
-      }
-      items.push(projectFeedItem(item));
-      if (items.length >= limit) break;
-    }
-
-    const truncated = enforceListBudget(items, offset, JSON.stringify);
-    return buildListEnvelope({
-      items: truncated.items,
-      nextOffset: truncated.nextOffset,
-      truncated: truncated.truncated,
+    const page = await collectOffsetPage(iterable, {
+      offset,
+      limit,
+      signal: ctx.abortSignal,
+      project: projectFeedItem,
     });
+    return buildBudgetedOffsetEnvelope(page, offset, JSON.stringify);
   },
 };

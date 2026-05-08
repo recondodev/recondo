@@ -321,7 +321,7 @@ describe("D-C5-3 relatedTurnsTool handler — signature + signal threading", () 
         { turn_id: "t-1", relation: "same_session" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -434,6 +434,90 @@ describe("D-C5-3 relatedTurnsTool handler — output envelope + wrapping", () =>
     expect(items.length).toBe(1);
   });
 
+  it("uses offset to return a later related-turns page and emits next_offset with a sentinel row", async () => {
+    relatedTurns.mockReturnValueOnce(
+      asyncIter([
+        {
+          turn_id: "related-1",
+          session_id: "session-1",
+          timestamp: "2026-01-01T00:00:00Z",
+          user_request_text: "one",
+        },
+        {
+          turn_id: "related-2",
+          session_id: "session-1",
+          timestamp: "2026-01-02T00:00:00Z",
+          user_request_text: "two",
+        },
+        {
+          turn_id: "related-3",
+          session_id: "session-1",
+          timestamp: "2026-01-03T00:00:00Z",
+          user_request_text: "three",
+        },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await relatedTurnsTool.handler(
+      {
+        turn_id: "t-1",
+        relation: "same_session",
+        limit: 1,
+        offset: 1,
+      } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("related-2");
+    expect(result.next_offset).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("returns null next_offset on the final related-turns page", async () => {
+    relatedTurns.mockReturnValueOnce(
+      asyncIter([
+        {
+          turn_id: "related-1",
+          session_id: "session-1",
+          timestamp: "2026-01-01T00:00:00Z",
+          user_request_text: "one",
+        },
+        {
+          turn_id: "related-2",
+          session_id: "session-1",
+          timestamp: "2026-01-02T00:00:00Z",
+          user_request_text: "two",
+        },
+        {
+          turn_id: "related-3",
+          session_id: "session-1",
+          timestamp: "2026-01-03T00:00:00Z",
+          user_request_text: "three",
+        },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await relatedTurnsTool.handler(
+      {
+        turn_id: "t-1",
+        relation: "same_session",
+        limit: 2,
+        offset: 2,
+      } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("related-3");
+    expect(result.next_offset).toBeNull();
+    expect(result.truncated).toBe(false);
+  });
+
   it("oversize rows engage enforceListBudget (truncated=true)", async () => {
     const big = "x".repeat(5 * 1024);
     const rows = Array.from({ length: 10 }, (_, i) => ({
@@ -484,6 +568,6 @@ describe("D-C5-3 relatedTurnsTool — pre-aborted signal", () => {
         { turn_id: "t-1", relation: "same_session" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

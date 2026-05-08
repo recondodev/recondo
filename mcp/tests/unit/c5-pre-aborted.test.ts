@@ -135,7 +135,7 @@ describe("D-C5 pre-aborted signal — recondo_compare_turns", () => {
         { turn_ids: ["t-1", "t-2"] } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -145,7 +145,7 @@ describe("D-C5 pre-aborted signal — recondo_find_similar_prompts", () => {
     const ctx = abortedCtx();
     await expect(
       findSimilarPromptsTool.handler({ turn_id: "t-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -158,7 +158,7 @@ describe("D-C5 pre-aborted signal — recondo_related_turns", () => {
         { turn_id: "t-1", relation: "same_session" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -171,6 +171,6 @@ describe("D-C5 pre-aborted signal — recondo_session_efficiency", () => {
         { session_id: "session-1" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

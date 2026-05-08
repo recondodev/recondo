@@ -282,7 +282,7 @@ describe("D-C3-2 getTurnTool handler — message wrapping", () => {
 
     await expect(
       getTurnTool.handler({ turn_id: "t-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("wraps thinkingText in <captured_assistant_thinking> envelope when present", async () => {

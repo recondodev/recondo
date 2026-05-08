@@ -5,8 +5,8 @@
  * transport, resolves the API key (or dev-bypass) into an
  * `AuthContext`, and registers the canonical read tools through the
  * `registerReadTool` helper. The `READ_TOOLS` array is the SINGLE
- * source of truth for the v1 read-tool catalog (27 entries after C9 —
- * insights dropped per C0). Any new read tool MUST be appended here so
+ * source of truth for the v1 read-tool catalog (28 entries after
+ * insights was restored as a first-class tool). Any new read tool MUST be appended here so
  * the catalog count + parity lints stay accurate.
  */
 
@@ -61,6 +61,7 @@ import { anomaliesTool } from "./tools/anomalies.js";
 import { complianceTool } from "./tools/compliance.js";
 import { reportsTool } from "./tools/reports.js";
 import { reportTrendsTool } from "./tools/report-trends.js";
+import { insightsTool } from "./tools/insights.js";
 import { policiesTool } from "./tools/policies.js";
 import { registeredKeysTool } from "./tools/registered-keys.js";
 // C10 — action tools.
@@ -89,7 +90,7 @@ const auditWriter: AuditWriter = {
 /**
  * Single source of truth for the v1 read-tool catalog.
  *
- * 27 tools after C9:
+ * 28 tools:
  *   - 7 from C2 (list_sessions, get_session, get_turn, get_turn_raw_metadata,
  *     get_turn_raw_chunk, search, verify_integrity)
  *   - 4 from C5 (compare_turns, find_similar_prompts, related_turns,
@@ -98,8 +99,8 @@ const auditWriter: AuditWriter = {
  *     cost_projections)
  *   - 4 from C7 (agent_summary, agent_framework_distribution, top,
  *     tool_call_stats)
- *   - 5 from C8 (audit_trail, anomalies, compliance, reports,
- *     report_trends — `insights` dropped per C0 §5 #1)
+ *   - 6 from C8/hardening (audit_trail, anomalies, compliance, reports,
+ *     report_trends, insights)
  *   - 2 from C9 (policies, registered_keys)
  */
 export const READ_TOOLS: ReadTool<any, any>[] = [
@@ -127,14 +128,13 @@ export const READ_TOOLS: ReadTool<any, any>[] = [
   agentFrameworkDistributionTool,
   topTool,
   toolCallStatsTool,
-  // C8 — audit / anomaly / compliance / reports tools (5 total).
-  // NOTE: the `insights` tool is intentionally NOT registered (C0 §5 #1
-  // dropped it — no matching `data.insights` resolver exists).
+  // C8/hardening — audit / anomaly / compliance / reports / insights.
   auditTrailTool,
   anomaliesTool,
   complianceTool,
   reportsTool,
   reportTrendsTool,
+  insightsTool,
   // C9 — policy + key reads.
   policiesTool,
   registeredKeysTool,

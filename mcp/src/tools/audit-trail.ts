@@ -25,6 +25,7 @@ import { z } from "zod";
 import { buildListEnvelope } from "../envelope/list.js";
 import { enforceListBudget } from "../envelope/truncate.js";
 import type { AuthContext } from "../auth/context.js";
+import { toDataLayerPeriod, type McpPeriod } from "../period.js";
 import type { ReadTool } from "../registry/types.js";
 
 const inputShape = {
@@ -80,7 +81,9 @@ export const auditTrailTool: ReadTool<AuditTrailInput, unknown> = {
     if (input.since !== undefined) filter.since = input.since;
     if (input.search !== undefined) filter.search = input.search;
     if (input.type !== undefined) filter.type = input.type;
-    if (input.period !== undefined) filter.period = input.period;
+    if (input.period !== undefined) {
+      filter.period = toDataLayerPeriod(input.period as McpPeriod);
+    }
     if (input.from !== undefined) filter.from = input.from;
     if (input.to !== undefined) filter.to = input.to;
 

@@ -239,7 +239,7 @@ describe("D-C6-1 realtimeOverviewTool handler — composition + signal threading
 
     await expect(
       realtimeOverviewTool.handler({} as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

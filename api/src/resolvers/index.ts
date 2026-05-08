@@ -25,7 +25,7 @@ import { complianceResolvers } from "./compliance.js";
 import { reportResolvers } from "./reports.js";
 import { policyResolvers } from "./policies.js";
 import { keyResolvers } from "./keys.js";
-import { DateTimeScalar } from "./scalars.js";
+import { DateTimeScalar, JsonScalar } from "./scalars.js";
 
 // B1: Type the merged resolver object against generated `Resolvers` type.
 // Schema drift (e.g., renaming a field in schema.graphql without updating
@@ -33,6 +33,7 @@ import { DateTimeScalar } from "./scalars.js";
 export const resolvers: Resolvers = {
   // B2: DateTime scalar resolver for proper serialization/parsing
   DateTime: DateTimeScalar,
+  JSON: JsonScalar,
   Query: {
     ...sessionResolvers.Query,
     ...turnResolvers.Query,

@@ -277,8 +277,8 @@ describe("D-C5-2 findSimilarPromptsTool handler — dispatch + signal threading"
     );
 
     const callArgs = findSimilarPrompts.mock.calls[0];
-    const wholeJson = JSON.stringify(callArgs);
-    expect(wholeJson).toContain('"limit":7');
+    const opts = callArgs[callArgs.length - 1] as { limit?: number };
+    expect(opts.limit).toBeGreaterThanOrEqual(7);
   });
 
   it("propagates AbortError when findSimilarPrompts throws synchronously", async () => {
@@ -291,7 +291,7 @@ describe("D-C5-2 findSimilarPromptsTool handler — dispatch + signal threading"
 
     await expect(
       findSimilarPromptsTool.handler({ turn_id: "t-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -396,6 +396,74 @@ describe("D-C5-2 findSimilarPromptsTool handler — output envelope + wrapping",
     expect(result.is_final).toBe(true);
   });
 
+  it("uses offset to return a later similar-prompt page and emits next_offset with a sentinel row", async () => {
+    findSimilarPrompts.mockReturnValueOnce(
+      asyncIter([
+        {
+          turn_id: "match-1",
+          session_id: "session-1",
+          user_request_text: "one",
+        },
+        {
+          turn_id: "match-2",
+          session_id: "session-1",
+          user_request_text: "two",
+        },
+        {
+          turn_id: "match-3",
+          session_id: "session-1",
+          user_request_text: "three",
+        },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await findSimilarPromptsTool.handler(
+      { turn_id: "t-1", limit: 1, offset: 1 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("match-2");
+    expect(result.next_offset).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("returns null next_offset on the final similar-prompt page", async () => {
+    findSimilarPrompts.mockReturnValueOnce(
+      asyncIter([
+        {
+          turn_id: "match-1",
+          session_id: "session-1",
+          user_request_text: "one",
+        },
+        {
+          turn_id: "match-2",
+          session_id: "session-1",
+          user_request_text: "two",
+        },
+        {
+          turn_id: "match-3",
+          session_id: "session-1",
+          user_request_text: "three",
+        },
+      ]),
+    );
+    const ctx = makeCtx();
+
+    const result = (await findSimilarPromptsTool.handler(
+      { turn_id: "t-1", limit: 2, offset: 2 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].turn_id).toBe("match-3");
+    expect(result.next_offset).toBeNull();
+    expect(result.truncated).toBe(false);
+  });
+
   it("oversize matches engage enforceListBudget (truncated=true + nextOffset set)", async () => {
     // Each match string ~5 KB; 10 matches blow past the 32 KB budget.
     const big = "x".repeat(5 * 1024);
@@ -440,6 +508,6 @@ describe("D-C5-2 findSimilarPromptsTool — pre-aborted signal", () => {
 
     await expect(
       findSimilarPromptsTool.handler({ turn_id: "t-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

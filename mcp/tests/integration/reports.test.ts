@@ -66,7 +66,7 @@ describeIfReady("D-C8-5 recondo_reports schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -88,7 +88,7 @@ describeIfReady("D-C8-5 recondo_reports integration", () => {
   const reportName = `Test Report ${reportId}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(

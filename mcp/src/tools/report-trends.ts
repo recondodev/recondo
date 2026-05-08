@@ -8,8 +8,8 @@
  *                  Per-report findings totals from `reports`.
  *
  * Both helpers return `ListEnvelope<TrendPoint>` (label + value);
- * the MCP surface forwards the envelope verbatim and does not page —
- * trend series are bounded by the migration-seeded row count.
+ * the MCP surface forwards limit/offset so long trend series remain
+ * pageable.
  *
  * `ctx.abortSignal` is threaded into the dispatched call.
  */
@@ -33,6 +33,8 @@ import type { ReadTool } from "../registry/types.js";
 const inputShape = {
   metric: z.enum(["coverage", "findings"]),
   project_id: z.string().optional(),
+  limit: z.number().int().min(1).max(500).default(20),
+  offset: z.number().int().min(0).default(0),
 };
 
 export const reportTrendsInputSchema = z.object(inputShape);
@@ -44,7 +46,7 @@ const DESCRIPTION =
   "historical coverage-% time-series from `report_coverage`. " +
   "`findings` returns per-report findings totals from `reports`. " +
   "Both branches return the canonical 5-key list envelope of " +
-  "`TrendPoint` (label + value).";
+  "`TrendPoint` (label + value), with `limit` / `offset` paging.";
 
 function authContextToApiKey(
   auth: AuthContext,
@@ -60,7 +62,7 @@ function authContextToApiKey(
 type TrendDispatcher = (
   apiKey: ApiKeyInfo,
   args: Record<string, never>,
-  options: { signal?: AbortSignal },
+  options: { limit?: number; offset?: number; signal?: AbortSignal },
 ) => Promise<ListEnvelope<TrendPoint>>;
 
 function pickDispatcher(metric: ReportTrendsInput["metric"]): TrendDispatcher {
@@ -84,10 +86,14 @@ export const reportTrendsTool: ReadTool<ReportTrendsInput, unknown> = {
     const envelope = await dispatch(
       apiKey,
       {},
-      { signal: ctx.abortSignal },
+      { limit: input.limit, offset: input.offset, signal: ctx.abortSignal },
     );
 
-    const budget = enforceListBudget(envelope.items, 0, JSON.stringify);
+    const budget = enforceListBudget(
+      envelope.items,
+      input.offset,
+      JSON.stringify,
+    );
     if (!budget.truncated) {
       return envelope;
     }

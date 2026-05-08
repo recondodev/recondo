@@ -68,7 +68,7 @@ describeIfReady("D-C8-1 recondo_audit_trail schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -90,7 +90,7 @@ describeIfReady("D-C8-1 recondo_audit_trail integration", () => {
   const sessionId = randomUUID();
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [{ id: sessionId, framework: "claude-code" }],
       turns: [

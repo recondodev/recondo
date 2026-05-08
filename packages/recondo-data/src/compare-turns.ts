@@ -85,6 +85,8 @@ export interface CompareTurnsRow {
    * `turn_ids` input order — D-CT5 verifies `Object.keys(values)`.
    */
   values: Record<string, unknown>;
+  /** Per-turn session id, keyed by turn_id, for safe captured-message envelopes. */
+  sessionIds: Record<string, string>;
   /** max - min for numeric aspects; null otherwise. */
   delta: number | null;
 }
@@ -112,6 +114,7 @@ function throwIfAborted(signal?: AbortSignal): void {
 
 interface TurnComparisonRow {
   id: string;
+  session_id: string;
   user_request_text: string | null;
   response_text: string | null;
   model: string | null;
@@ -153,6 +156,7 @@ async function compareTurnsAsync(
   const pool = getPool();
   const result = await pool.query(
     `SELECT t.id,
+            t.session_id,
             t.user_request_text,
             t.response_text,
             t.model,
@@ -177,6 +181,7 @@ async function compareTurnsAsync(
     const r = raw as Record<string, unknown>;
     byId.set(r.id as string, {
       id: r.id as string,
+      session_id: r.session_id as string,
       user_request_text: (r.user_request_text as string | null) ?? null,
       response_text: (r.response_text as string | null) ?? null,
       model: (r.model as string | null) ?? null,
@@ -217,8 +222,12 @@ function buildRow(
     // Existence is guaranteed by the missing-ids check above.
     values[id] = extractAspectValue(aspect, row!);
   }
+  const sessionIds: Record<string, string> = {};
+  for (const id of turn_ids) {
+    sessionIds[id] = byId.get(id)!.session_id;
+  }
   const delta = computeDelta(aspect, values);
-  return { aspect, values, delta };
+  return { aspect, values, sessionIds, delta };
 }
 
 function extractAspectValue(

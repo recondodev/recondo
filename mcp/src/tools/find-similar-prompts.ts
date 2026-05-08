@@ -29,10 +29,12 @@ import type {
 } from "@recondo/data";
 import { z } from "zod";
 
-import { buildListEnvelope } from "../envelope/list.js";
 import { buildMessageEnvelope } from "../envelope/messages.js";
-import { enforceListBudget } from "../envelope/truncate.js";
 import type { ReadTool } from "../registry/types.js";
+import {
+  buildBudgetedOffsetEnvelope,
+  collectOffsetPage,
+} from "./pagination.js";
 
 const inputShape = {
   turn_id: z.string().min(1).optional(),
@@ -111,24 +113,16 @@ export const findSimilarPromptsTool: ReadTool<
     const dataInput: DataLayerInput =
       input.turn_id !== undefined ? input.turn_id : { text: input.text! };
 
-    const items: SimilarPromptItem[] = [];
     const iterable = findSimilarPrompts(dataInput, {
-      limit,
+      limit: offset + limit + 1,
       signal: ctx.abortSignal,
     });
-    for await (const match of iterable) {
-      if (ctx.abortSignal?.aborted) {
-        throw new DOMException("aborted", "AbortError");
-      }
-      items.push(projectMatch(match));
-      if (items.length >= limit) break;
-    }
-
-    const budget = enforceListBudget(items, offset, JSON.stringify);
-    return buildListEnvelope({
-      items: budget.items,
-      nextOffset: budget.nextOffset,
-      truncated: budget.truncated,
+    const page = await collectOffsetPage(iterable, {
+      offset,
+      limit,
+      signal: ctx.abortSignal,
+      project: projectMatch,
     });
+    return buildBudgetedOffsetEnvelope(page, offset, JSON.stringify);
   },
 };

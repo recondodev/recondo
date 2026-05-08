@@ -53,7 +53,7 @@ interface ResourceReadResult {
 
 describeIfReady("D-C12-4 prompts/list — gated on --allow-actions", () => {
   it("WITHOUT --allow-actions, prompts/list omits weekly_cost_report (3 visible)", async () => {
-    const mcp = await spawnMcp({ args: [] });
+    const mcp = await spawnMcp({ devBypass: true, args: [] });
     try {
       const result = await mcp.request<{ prompts: PromptListItem[] }>(
         "prompts/list",
@@ -68,7 +68,7 @@ describeIfReady("D-C12-4 prompts/list — gated on --allow-actions", () => {
   });
 
   it("WITH --allow-actions, prompts/list includes all four", async () => {
-    const mcp = await spawnMcp({ args: ["--allow-actions"] });
+    const mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
     try {
       const result = await mcp.request<{ prompts: PromptListItem[] }>(
         "prompts/list",
@@ -88,7 +88,7 @@ describeIfReady("D-C12-4 prompts/list — gated on --allow-actions", () => {
 
 describeIfReady("D-C12-7 resources/list — three resource templates", () => {
   it("returns three resource templates: session, turn, reports", async () => {
-    const mcp = await spawnMcp({});
+    const mcp = await spawnMcp({ devBypass: true });
     try {
       // The MCP SDK exposes templated resources via
       // `resources/templates/list`. Some SDK builds include them in
@@ -138,7 +138,7 @@ describeIfReady("D-C12-8 resources/read recondo://session/<id> — active vs clo
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

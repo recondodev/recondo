@@ -1,10 +1,8 @@
 /**
- * `recondo_generate_report` — action tool that produces a compliance
+ * `recondo_generate_report` — action tool that produces a persisted
  * report row.
  *
  * Wraps the data-layer helper `generateReport(apiKey, input, options)`.
- * Maps the MCP-facing `period_start` / `period_end` snake_case fields
- * onto the data-layer's `periodStart` / `periodEnd` camelCase shape.
  * `ctx.abortSignal` is threaded into `options.signal`.
  */
 
@@ -17,19 +15,21 @@ import type { ActionTool } from "../registry/types.js";
 import { INJECTION_WARNING } from "../registry/warning.js";
 
 const inputShape = {
-  framework: z.string(),
-  period_start: z.string(),
-  period_end: z.string(),
+  type: z.enum(["weekly_cost", "compliance", "anomaly", "custom"]),
+  period: z.enum(["week", "month"]),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  params: z.record(z.unknown()).optional(),
   project_id: z.string().optional(),
 };
 
-export const generateReportInputSchema = z.object(inputShape);
+export const generateReportInputSchema = z.object(inputShape).strict();
 export type GenerateReportInput = z.infer<typeof generateReportInputSchema>;
 
 const DESCRIPTION =
-  "Generate a compliance report (e.g. soc2, iso42001) for a given " +
-  "period. Inserts a new row into the `reports` table summarising " +
-  "captures + findings for the window. Returns `{ report, errors }`. " +
+  "Generate a canonical, persisted report (weekly_cost, compliance, " +
+  "anomaly, or custom) for a week or month window. Inserts a new row " +
+  "into the `reports` table and returns `{ report, errors }`. " +
   INJECTION_WARNING;
 
 function authContextToApiKey(
@@ -49,14 +49,17 @@ export const generateReportTool: ActionTool<GenerateReportInput, unknown> = {
   inputShape,
   inputSchema: generateReportInputSchema,
   destructive: false,
-  handler: async (input, ctx) => {
+  handler: async (rawInput, ctx) => {
+    const input = generateReportInputSchema.parse(rawInput);
     const apiKey = authContextToApiKey(ctx.auth, input.project_id);
     return generateReport(
       apiKey,
       {
-        framework: input.framework,
-        periodStart: input.period_start,
-        periodEnd: input.period_end,
+        type: input.type,
+        period: input.period,
+        from: input.from,
+        to: input.to,
+        params: input.params,
       },
       { signal: ctx.abortSignal },
     );

@@ -67,7 +67,7 @@ describeIfReady("D-C5-1 recondo_compare_turns schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -95,7 +95,7 @@ describeIfReady("D-C5-1 recondo_compare_turns end-to-end", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -220,6 +220,8 @@ describeIfReady("D-C5-1 recondo_compare_turns end-to-end", () => {
     expect(wholeJson).toContain("bravo prompt");
     expect(wholeJson).toContain("alpha reply");
     expect(wholeJson).toContain("bravo reply");
+    expect(wholeJson).toContain(`"from_session_id":"${sessionA}"`);
+    expect(wholeJson).toContain(`"from_session_id":"${sessionB}"`);
   });
 
   it("rejects < 2 turn_ids via SDK schema validation", async () => {

@@ -3,7 +3,7 @@
  *
  * Preconditions:
  *   - `just dev-infra` running.
- *   - `just api-migrate` has applied migration 013_mcp-audit-log.sql.
+ *   - `just api-migrate` has applied migrations 013 and 016.
  *
  * Asserts:
  *   - INSERT round-trips a row.
@@ -53,7 +53,7 @@ describeIfDb("D-C1-8 insertAuditLog DB integration", () => {
 
     const pool = getPool();
     const result = await pool.query(
-      `SELECT tool_name, arguments, response_bytes, client_name, key_id
+      `SELECT tool_name, arguments, response_bytes, client_name, key_id, outcome, error_message
        FROM audit_log
        WHERE tool_name = $1
        ORDER BY requested_at DESC
@@ -67,6 +67,35 @@ describeIfDb("D-C1-8 insertAuditLog DB integration", () => {
     expect(Number(row.response_bytes)).toBe(42);
     expect(row.client_name).toBe("vitest");
     expect(row.key_id).toBe("dev-bypass");
+    expect(row.outcome).toBe("success");
+    expect(row.error_message).toBeNull();
+  });
+
+  it("INSERT round-trip: explicit error outcome appears in audit_log", async () => {
+    const errorToolName = `${toolName}-error`;
+    await insertAuditLog({
+      toolName: errorToolName,
+      arguments: { x: 2 },
+      responseBytes: 0,
+      clientName: "vitest",
+      keyId: "dev-bypass",
+      outcome: "error",
+      errorMessage: "synthetic failure",
+    });
+
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT outcome, error_message, response_bytes
+       FROM audit_log
+       WHERE tool_name = $1
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [errorToolName],
+    );
+    expect(result.rows.length).toBe(1);
+    expect(result.rows[0].outcome).toBe("error");
+    expect(result.rows[0].error_message).toBe("synthetic failure");
+    expect(Number(result.rows[0].response_bytes)).toBe(0);
   });
 
   it("UPDATE raises the immutability trigger", async () => {

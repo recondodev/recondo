@@ -20,6 +20,8 @@ export interface AuditEntry {
   responseBytes: number;
   clientName?: string | null;
   keyId?: string | null;
+  outcome?: "success" | "error" | "aborted";
+  errorMessage?: string | null;
 }
 
 export interface WriteAuditOptions {
@@ -38,13 +40,15 @@ export async function writeAuditEntry(
         responseBytes: entry.responseBytes,
         clientName: entry.clientName ?? null,
         keyId: entry.keyId ?? null,
+        outcome: entry.outcome ?? "success",
+        errorMessage: entry.errorMessage ?? null,
       },
       { signal: options?.signal },
     );
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.warn(
-      { error: errMsg, toolName: entry.toolName },
+      { audit_write_failed: true, error: errMsg, toolName: entry.toolName },
       "audit insert failed",
     );
   }

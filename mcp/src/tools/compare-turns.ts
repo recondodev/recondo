@@ -71,11 +71,7 @@ function wrapCapturedAspects(
       if (typeof raw === "string") {
         wrappedValues[turnId] = buildMessageEnvelope(
           role,
-          // The data layer doesn't carry session_id back per turn in
-          // CompareTurnsRow; the envelope wants a session id, so we
-          // pass an empty string and rely on the turn id to disambiguate.
-          // Consumers wiring back to a session do it via `recondo_get_turn`.
-          "",
+          row.sessionIds?.[turnId] ?? "",
           turnId,
           raw,
         );

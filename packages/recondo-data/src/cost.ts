@@ -250,8 +250,7 @@ async function spendByCategory(
      WHERE t.timestamp::timestamptz >= $1::timestamptz AND t.timestamp::timestamptz <= $2::timestamptz
        AND ${groupCol} IS NOT NULL${projectClause}
      GROUP BY ${groupCol}
-     ORDER BY cost_usd DESC
-     LIMIT 100`,
+     ORDER BY cost_usd DESC`,
     [range.from, range.to, ...scopeParams],
   );
 
@@ -266,38 +265,63 @@ async function spendByCategory(
   }));
 }
 
+function normalizeListOptions(options: ListOptions): { limit: number; offset: number } {
+  let limit = options.limit ?? 50;
+  let offset = options.offset ?? 0;
+  if (limit < 1) limit = 1;
+  if (limit > 500) limit = 500;
+  if (offset < 0) offset = 0;
+  return { limit, offset };
+}
+
+function paginateSpendBuckets<T>(
+  items: T[],
+  options: ListOptions,
+): ListEnvelope<T> & { total: number; limit: number; offset: number } {
+  const { limit, offset } = normalizeListOptions(options);
+  const page = items.slice(offset, offset + limit);
+  const truncated = offset + page.length < items.length;
+  const nextOffset = truncated ? offset + page.length : null;
+  return {
+    ...uniformListEnvelope(page, { nextOffset, truncated }),
+    total: items.length,
+    limit,
+    offset,
+  };
+}
+
 export async function listSpendByProvider(
   apiKey: ApiKeyInfo,
   args: CostQueryArgs = {},
   options: ListOptions = {},
-): Promise<ListEnvelope<SpendBucket>> {
+): Promise<ListEnvelope<SpendBucket> & { total: number; limit: number; offset: number }> {
   const items = await spendByCategory(apiKey, "provider", "turns", args, options);
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  return paginateSpendBuckets(items, options);
 }
 
 export async function listSpendByModel(
   apiKey: ApiKeyInfo,
   args: CostQueryArgs = {},
   options: ListOptions = {},
-): Promise<ListEnvelope<SpendBucket>> {
+): Promise<ListEnvelope<SpendBucket> & { total: number; limit: number; offset: number }> {
   const items = await spendByCategory(apiKey, "model", "turns", args, options);
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  return paginateSpendBuckets(items, options);
 }
 
 export async function listSpendByFramework(
   apiKey: ApiKeyInfo,
   args: CostQueryArgs = {},
   options: ListOptions = {},
-): Promise<ListEnvelope<SpendBucket>> {
+): Promise<ListEnvelope<SpendBucket> & { total: number; limit: number; offset: number }> {
   const items = await spendByCategory(apiKey, "framework", "sessions", args, options);
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  return paginateSpendBuckets(items, options);
 }
 
 export async function listDailySpend(
   apiKey: ApiKeyInfo,
   args: CostQueryArgs & { days?: number | null } = {},
   options: ListOptions = {},
-): Promise<ListEnvelope<SpendBucket>> {
+): Promise<ListEnvelope<SpendBucket> & { total: number; limit: number; offset: number }> {
   if (options.signal?.aborted) {
     throw new DOMException("aborted", "AbortError");
   }
@@ -331,20 +355,26 @@ export async function listDailySpend(
 
   const rows = result.rows as Array<{ day: string; cost_usd: number; count: number }>;
   const totalCost = rows.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
-  const limited = rows.slice(0, days);
-
-  const items = limited.map((r) => ({
+  const items = rows.slice(0, days).map((r) => ({
     name: r.day,
     costUsd: r.cost_usd ?? 0,
     percentage: totalCost > 0 ? ((r.cost_usd ?? 0) / totalCost) * 100 : 0,
     count: r.count ?? 0,
   }));
-  return uniformListEnvelope(items, { nextOffset: null, truncated: false });
+  return paginateSpendBuckets(items, options);
+}
+
+function projectionWindowDays(period?: string | null): number {
+  if (!period) return 30;
+  const match = period.match(/^DAY_(\d+)$/i);
+  if (!match) return 30;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
 }
 
 export async function getCostProjections(
   apiKey: ApiKeyInfo,
-  _period?: string | null,
+  period?: string | null,
   options: QueryOptions = {},
 ): Promise<CostProjection[]> {
   if (options.signal?.aborted) {
@@ -352,8 +382,9 @@ export async function getCostProjections(
   }
   const pool = getPool();
   const now = new Date();
+  const windowDays = projectionWindowDays(period);
 
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+  const baselineStart = new Date(now.getTime() - windowDays * 86_400_000).toISOString();
   const nowIso = now.toISOString();
 
   const scopeConditions: string[] = [];
@@ -371,17 +402,18 @@ export async function getCostProjections(
      FROM turns t
      JOIN sessions s ON t.session_id = s.id
      WHERE t.timestamp::timestamptz >= $1::timestamptz AND t.timestamp::timestamptz <= $2::timestamptz${projectClause}`,
-    [thirtyDaysAgo, nowIso, ...scopeParams],
+    [baselineStart, nowIso, ...scopeParams],
   );
 
   const row = result.rows[0];
-  const totalCost30d = (row.total_cost as number) ?? 0;
-  const totalTokens30d = (row.total_tokens as number) ?? 0;
-  const sessionCount30d = (row.session_count as number) ?? 0;
+  const totalCost = (row.total_cost as number) ?? 0;
+  const totalTokens = (row.total_tokens as number) ?? 0;
+  const sessionCount = (row.session_count as number) ?? 0;
+  const scaleToMonthly = 30 / windowDays;
 
-  const monthlyCost = totalCost30d;
-  const monthlyTokens = totalTokens30d;
-  const monthlySessions = sessionCount30d;
+  const monthlyCost = totalCost * scaleToMonthly;
+  const monthlyTokens = totalTokens * scaleToMonthly;
+  const monthlySessions = sessionCount * scaleToMonthly;
 
   const projections: CostProjection[] = [];
   for (let i = 1; i <= 3; i++) {
@@ -402,7 +434,7 @@ export async function getCostProjections(
       projectedTokens: Math.round(projectedTokens),
       projectedCostUsd: Math.round(projectedCost * 100) / 100,
       deltaVsCurrent: Math.round(deltaVsCurrent * 100) / 100,
-      assumptions: `Assumed ${Math.round((growthFactor - 1) * 100)}% monthly growth rate applied to 30-day baseline average.`,
+      assumptions: `Assumed ${Math.round((growthFactor - 1) * 100)}% monthly growth rate applied to ${windowDays}-day baseline average scaled to a 30-day month.`,
     });
   }
 

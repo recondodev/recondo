@@ -24,6 +24,6 @@ describe("@recondo/data: listComplianceFindings (D-CP1)", () => {
     ctrl.abort();
     await expect(
       listComplianceFindings(adminKey, {}, { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

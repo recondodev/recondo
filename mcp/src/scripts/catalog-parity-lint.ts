@@ -1,17 +1,17 @@
 /**
- * Catalog parity lint — Phase 1 (D-C11).
+ * Catalog parity lint — Phase 2.
  *
  * Asserts that every export in the `@recondo/data` public surface is
  * accounted for in exactly one of:
  *   - READ_TOOL_TO_DATA_FN  — read-tool name → data fn(s)
  *   - ACTION_TOOL_TO_DATA_FN — action-tool name → data fn
+ *   - CLI_TO_DATA_FN        — CLI subcommand surface → data fn
  *   - READ_OPT_OUTS         — internal/driver/legacy exports we deliberately
  *                              do NOT surface as MCP tools (rationale required)
  *
- * Phase 1 covers NAME PARITY only. The action-immutability invariant
- * (action tools must not write tables that capture-side code owns) is
- * deliberately deferred to Phase 2 — see TODO marker at the bottom of
- * this file.
+ * It also checks action immutability using `TABLE_TARGETS`: mutating MCP
+ * tools may not write captured tables (`sessions`, `turns`, `tool_calls`,
+ * `attachments`).
  *
  * The compiled script (`mcp/dist/scripts/catalog-parity-lint.js`) is
  * invoked by `just mcp-lint-parity` as a child process; it exits 0 when
@@ -63,6 +63,7 @@ export const READ_TOOL_TO_DATA_FN: Record<string, string | string[]> = {
   ],
   recondo_reports: "listReports",
   recondo_report_trends: ["listReportCoverageTrend", "listReportFindingsTrend"],
+  recondo_insights: "getInsights",
   recondo_policies: ["listPolicies", "listPolicyTriggerHistory"],
   recondo_registered_keys: "listApiKeys",
 };
@@ -83,6 +84,11 @@ export const ACTION_TOOL_TO_DATA_FN: Record<string, string> = {
   recondo_delete_key: "revokeApiKey",
 };
 
+/** Non-tool CLI surfaces that still consume public data-layer fns. */
+export const CLI_TO_DATA_FN: Record<string, string> = {
+  "recondo-mcp config --scoped": "mintScopedKey",
+};
+
 /**
  * `@recondo/data` exports the MCP server intentionally does NOT expose
  * as a tool. Each value is a one-line rationale; new entries should be
@@ -99,6 +105,10 @@ export const READ_OPT_OUTS: Record<string, string> = {
   // Audit writer — used by the MCP server itself for per-call audit, not
   // a tool that callers can invoke.
   insertAuditLog: "internal audit writer used by MCP server, not a tool",
+
+  // Table-target metadata — consumed by this lint, not a tool.
+  CAPTURED_TABLES: "static captured-table set for catalog linting, not a tool",
+  TABLE_TARGETS: "static table-target metadata for catalog linting, not a tool",
 
   // listStructured* — legacy /v1/query dispatcher surface still used by
   // the api/ shim; tool-side queries go through the per-domain tools.
@@ -216,7 +226,12 @@ export const READ_OPT_OUTS: Record<string, string> = {
 // ---------------------------------------------------------------------
 
 export interface LintViolation {
-  kind: "uncovered_export" | "phantom_mapping" | "phantom_opt_out";
+  kind:
+    | "uncovered_export"
+    | "phantom_mapping"
+    | "phantom_opt_out"
+    | "missing_table_targets"
+    | "action_writes_captured_table";
   export: string;
   message: string;
 }
@@ -234,14 +249,31 @@ export function runLint(opts?: {
   dataExports?: ReadonlyArray<string>;
   readMap?: Record<string, string | string[]>;
   actionMap?: Record<string, string>;
+  cliMap?: Record<string, string>;
   optOuts?: Record<string, string>;
+  tableTargets?: Record<string, readonly string[]>;
+  capturedTables?: ReadonlyArray<string>;
 }): LintResult {
   const dataExports = new Set(
     opts?.dataExports ?? Object.keys(data as Record<string, unknown>),
   );
   const readMap = opts?.readMap ?? READ_TOOL_TO_DATA_FN;
   const actionMap = opts?.actionMap ?? ACTION_TOOL_TO_DATA_FN;
+  const cliMap = opts?.cliMap ?? CLI_TO_DATA_FN;
   const optOuts = opts?.optOuts ?? READ_OPT_OUTS;
+  const tableTargets =
+    opts?.tableTargets ??
+    ((data as Record<string, unknown>).TABLE_TARGETS as
+      | Record<string, readonly string[]>
+      | undefined) ??
+    {};
+  const capturedTables =
+    opts?.capturedTables ??
+    ((data as Record<string, unknown>).CAPTURED_TABLES as
+      | ReadonlyArray<string>
+      | undefined) ??
+    [];
+  const capturedSet = new Set(capturedTables);
 
   const violations: LintViolation[] = [];
 
@@ -259,6 +291,7 @@ export function runLint(opts?: {
   const coveredByTools = new Set<string>([
     ...readPairs.map(([, fn]) => fn),
     ...Object.values(actionMap),
+    ...Object.values(cliMap),
   ]);
 
   // Check 1 — uncovered_export: any data export not in the union of
@@ -293,6 +326,15 @@ export function runLint(opts?: {
       });
     }
   }
+  for (const [surface, fn] of Object.entries(cliMap)) {
+    if (!dataExports.has(fn)) {
+      violations.push({
+        kind: "phantom_mapping",
+        export: fn,
+        message: `CLI surface '${surface}' maps to non-existent @recondo/data export '${fn}'`,
+      });
+    }
+  }
 
   // Check 3 — phantom_opt_out: an opt-out entry duplicates a tool
   // mapping (already covered → opt-out is redundant and should be
@@ -303,6 +345,29 @@ export function runLint(opts?: {
         kind: "phantom_opt_out",
         export: name,
         message: `opt-out '${name}' is already covered by a tool mapping (redundant; remove it from READ_OPT_OUTS)`,
+      });
+    }
+  }
+
+  // Check 4 — action immutability: action tools must not write captured
+  // tables owned by the capture path.
+  for (const [tool, fn] of Object.entries(actionMap)) {
+    if (!dataExports.has(fn)) continue;
+    const targets = tableTargets[fn];
+    if (!targets) {
+      violations.push({
+        kind: "missing_table_targets",
+        export: fn,
+        message: `action tool '${tool}' maps to '${fn}', but TABLE_TARGETS has no entry for that data function`,
+      });
+      continue;
+    }
+    const illegal = targets.filter((table) => capturedSet.has(table));
+    if (illegal.length > 0) {
+      violations.push({
+        kind: "action_writes_captured_table",
+        export: fn,
+        message: `action tool '${tool}' writes captured table(s): ${illegal.join(", ")}`,
       });
     }
   }
@@ -331,20 +396,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 }
-
-// ---------------------------------------------------------------------
-// Phase 2 TODO — action-immutability lint (deferred).
-// ---------------------------------------------------------------------
-// TODO(plan-e, Phase 2): Add an action-immutability lint that walks
-// ACTION_TOOL_TO_DATA_FN against a `__tableTargets` metadata field
-// attached to every @recondo/data export, asserting that no action tool
-// writes a table owned by capture-side code (turns, sessions, tool_calls,
-// anomalies, captures, ...). The mechanism requires `__tableTargets` on
-// every export and is out of scope for Phase 1.
-//
-// Until Phase 2 lands, the load-bearing replacement is the D-C13-8
-// integration test (`mcp/tests/integration/action_immutability.test.ts`)
-// which row-count-hashes the captured tables before and after every
-// action-tool invocation and fails on any drift. Operators reading this
-// lint should know the immutability invariant IS enforced — just by a
-// runtime test instead of a static check.

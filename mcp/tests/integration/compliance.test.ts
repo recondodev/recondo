@@ -16,10 +16,9 @@
  *   row into `compliance_audit_log` directly under GDPR bypass NOT
  *   required (it is not part of the captured-tables append-only set).
  *
- * Also includes a phantom-tool guard: `recondo_insights` MUST NOT appear
- * in `tools/list` (per C0 §5 #1: the `insights` tool is DROPPED). This
- * pins the C0 decision at the integration boundary so a regression that
- * adds a phantom registration fails here.
+ * Also confirms the restored `recondo_insights` tool appears in
+ * `tools/list`; the detailed insight behavior lives in the dedicated
+ * insights tests.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync } from "node:fs";
@@ -79,11 +78,11 @@ function expectListEnvelope(env: Record<string, unknown>): void {
   expect(Array.isArray(env.items)).toBe(true);
 }
 
-describeIfReady("D-C8-3 recondo_compliance schema discovery + insights drop", () => {
+describeIfReady("D-C8-3 recondo_compliance schema discovery + insights registration", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -108,15 +107,11 @@ describeIfReady("D-C8-3 recondo_compliance schema discovery + insights drop", ()
     }
   });
 
-  it("CRITICAL anti-phantom: `recondo_insights` is NOT a registered tool", async () => {
-    // Per C0 §5 #1, the `insights` data-layer function does not exist
-    // and the `recondo_insights` tool is DROPPED. C8 ships exactly 5
-    // tools (NOT 6 from Plan D's draft). C9's catalog count test will
-    // assert 27 read tools (NOT 28). This integration check is a hard
-    // assertion that pins the DROP decision at the binary boundary.
+  it("advertises the restored `recondo_insights` tool", async () => {
     const result = await mcp.request<{ tools: ToolDefinition[] }>("tools/list");
-    const phantom = result.tools.find((t) => t.name === "recondo_insights");
-    expect(phantom).toBeUndefined();
+    const tool = result.tools.find((t) => t.name === "recondo_insights");
+    expect(tool).toBeDefined();
+    expect((tool?.description ?? "").length).toBeGreaterThanOrEqual(50);
   });
 });
 
@@ -128,7 +123,7 @@ describeIfReady("D-C8-3 recondo_compliance integration — all 3 views", () => {
   const sessionId = randomUUID();
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [{ id: sessionId, framework: "claude-code" }],
       turns: [

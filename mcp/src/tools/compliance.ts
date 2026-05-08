@@ -53,7 +53,35 @@ const inputShape = {
   offset: z.number().int().min(0).optional(),
 };
 
-export const complianceInputSchema = z.object(inputShape);
+const summaryInputSchema = z
+  .object({
+    view: z.literal("summary"),
+    project_id: z.string().optional(),
+  })
+  .strict();
+
+const frameworksInputSchema = z
+  .object({
+    view: z.literal("frameworks"),
+    project_id: z.string().optional(),
+  })
+  .strict();
+
+const auditLogInputSchema = z
+  .object({
+    view: z.literal("audit_log"),
+    control_id: z.string().optional(),
+    project_id: z.string().optional(),
+    limit: z.number().int().min(1).optional(),
+    offset: z.number().int().min(0).optional(),
+  })
+  .strict();
+
+export const complianceInputSchema = z.discriminatedUnion("view", [
+  summaryInputSchema,
+  frameworksInputSchema,
+  auditLogInputSchema,
+]);
 export type ComplianceInput = z.infer<typeof complianceInputSchema>;
 
 const DESCRIPTION =
@@ -87,8 +115,9 @@ export const complianceTool: ReadTool<ComplianceInput, unknown> = {
   name: "recondo_compliance",
   description: DESCRIPTION,
   inputShape,
-  inputSchema: complianceInputSchema,
-  handler: async (input, ctx) => {
+  inputSchema: complianceInputSchema as unknown as z.SomeZodObject,
+  handler: async (rawInput, ctx) => {
+    const input = complianceInputSchema.parse(rawInput);
     const apiKey = authContextToApiKey(ctx.auth, input.project_id);
 
     if (input.view === "summary") {
@@ -103,7 +132,7 @@ export const complianceTool: ReadTool<ComplianceInput, unknown> = {
         apiKey,
         { signal: ctx.abortSignal },
       );
-      const offset = input.offset ?? 0;
+      const offset = 0;
       const budget = enforceListBudget(envelope.items, offset, JSON.stringify);
       if (!budget.truncated) {
         return envelope;

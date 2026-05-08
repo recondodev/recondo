@@ -191,6 +191,14 @@ describe("D-C8-1 auditTrailTool handler — call wiring", () => {
     expect(apiKey.projectId).toBe("override-project");
   });
 
+  it("translates human-readable period before forwarding to the data layer", async () => {
+    listAuditEvents.mockResolvedValueOnce(envelopeWith([]));
+    const ctx = makeCtx();
+    await auditTrailTool.handler({ period: "week" } as never, ctx);
+    const [, filter] = listAuditEvents.mock.calls[0];
+    expect((filter as { period?: string }).period).toBe("DAY_7");
+  });
+
   it("propagates AbortError when the call rejects", async () => {
     listAuditEvents.mockRejectedValueOnce(
       new DOMException("aborted", "AbortError"),
@@ -198,7 +206,7 @@ describe("D-C8-1 auditTrailTool handler — call wiring", () => {
     const ac = new AbortController();
     ac.abort();
     const ctx = makeCtx({ abortSignal: ac.signal });
-    await expect(auditTrailTool.handler({} as never, ctx)).rejects.toThrow();
+    await expect(auditTrailTool.handler({} as never, ctx)).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

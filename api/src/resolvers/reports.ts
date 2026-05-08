@@ -1,43 +1,42 @@
-/**
- * Reports resolvers — thin GraphQL adapters over @recondo/data.
- *
- * SQL bodies live in `packages/recondo-data/src/reports.ts`. This file
- * is responsible for:
- *   - mapping GraphQL args to the @recondo/data shape
- *   - binding the data layer's raw status string ("FINAL"|"DRAFT") to
- *     the GraphQL `ReportStatus` enum
- *   - re-shaping the reports envelope into the GraphQL connection shape
- *     (items/total/limit/offset)
- *   - re-shaping trend envelopes into bare GraphQL lists
- */
-
 import {
   listReports,
   listReportCoverageTrend,
   listReportFindingsTrend,
   generateReport,
+  type GenerateReportInput,
+  type GenerateReportPeriod,
+  type GenerateReportType,
   type ReportRow,
 } from "@recondo/data";
-import { ReportStatus } from "../generated/graphql.js";
-import type {
-  QueryResolvers,
-  MutationResolvers,
+import {
+  GenerateReportPeriod as GraphqlGenerateReportPeriod,
+  GenerateReportType as GraphqlGenerateReportType,
+  ReportStatus,
 } from "../generated/graphql.js";
+import type { QueryResolvers, MutationResolvers } from "../generated/graphql.js";
 
-function mapToReportStatus(status: string): ReportStatus {
-  switch (status) {
-    case "FINAL":
-      return ReportStatus.Final;
-    case "DRAFT":
-      return ReportStatus.Draft;
-    default:
-      throw new Error(`Unknown report status: '${status}'`);
-  }
-}
+const REPORT_STATUS_MAP: Record<string, ReportStatus> = {
+  FINAL: ReportStatus.Final,
+  DRAFT: ReportStatus.Draft,
+};
 
 function shapeReport(row: ReportRow) {
-  return { ...row, status: mapToReportStatus(row.status) };
+  const status = REPORT_STATUS_MAP[row.status];
+  if (!status) throw new Error(`Unknown report status: '${row.status}'`);
+  return { ...row, status };
 }
+
+const REPORT_TYPE_MAP: Record<GraphqlGenerateReportType, GenerateReportType> = {
+  [GraphqlGenerateReportType.WeeklyCost]: "weekly_cost",
+  [GraphqlGenerateReportType.Compliance]: "compliance",
+  [GraphqlGenerateReportType.Anomaly]: "anomaly",
+  [GraphqlGenerateReportType.Custom]: "custom",
+};
+
+const REPORT_PERIOD_MAP: Record<GraphqlGenerateReportPeriod, GenerateReportPeriod> = {
+  [GraphqlGenerateReportPeriod.Week]: "week",
+  [GraphqlGenerateReportPeriod.Month]: "month",
+};
 
 const reportsResolver: NonNullable<QueryResolvers["reports"]> = async (_p, args, ctx) => {
   const env = await listReports(
@@ -70,11 +69,14 @@ const generateReportMutation: NonNullable<MutationResolvers["generateReport"]> =
   args,
   ctx,
 ) => {
-  const payload = await generateReport(ctx.apiKey, {
-    framework: args.input.framework as string,
-    periodStart: args.input.periodStart as string,
-    periodEnd: args.input.periodEnd as string,
-  });
+  const input: GenerateReportInput = {
+    type: REPORT_TYPE_MAP[args.input.type],
+    period: REPORT_PERIOD_MAP[args.input.period],
+    from: args.input.from ?? undefined,
+    to: args.input.to ?? undefined,
+    params: args.input.params ?? undefined,
+  };
+  const payload = await generateReport(ctx.apiKey, input);
   return {
     report: payload.report ? shapeReport(payload.report) : null,
     errors: payload.errors,

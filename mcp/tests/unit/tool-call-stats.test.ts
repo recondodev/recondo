@@ -277,6 +277,20 @@ describe("D-C7-4 toolCallStatsTool handler — call shape + signal threading", (
     expect(opts.signal).toBe(ac.signal);
   });
 
+  it("forwards project_id into the data-layer options bag", async () => {
+    toolCallStats.mockReturnValueOnce(asyncIter([]));
+    const ctx = makeCtx();
+
+    await toolCallStatsTool.handler(
+      { group_by: "tool_name", project_id: "proj-1" } as never,
+      ctx,
+    );
+
+    const callArgs = toolCallStats.mock.calls[0];
+    const opts = callArgs[0] as { projectId?: string };
+    expect(opts.projectId).toBe("proj-1");
+  });
+
   it("propagates AbortError when toolCallStats throws synchronously (pre-aborted)", async () => {
     toolCallStats.mockImplementationOnce(() => {
       throw new DOMException("aborted", "AbortError");
@@ -290,7 +304,7 @@ describe("D-C7-4 toolCallStatsTool handler — call shape + signal threading", (
         { group_by: "tool_name" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

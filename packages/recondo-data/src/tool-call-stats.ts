@@ -111,9 +111,10 @@ function toFiniteNumber(v: unknown): number {
 export function toolCallStats(options: {
   group_by: ToolCallGroupBy;
   period: ToolCallPeriod;
+  projectId?: string | null;
   signal?: AbortSignal;
 }): AsyncIterable<ToolCallStatsRow> {
-  const { group_by, period, signal } = options;
+  const { group_by, period, projectId, signal } = options;
 
   if (!ALLOWED_GROUP_BY.has(group_by as string)) {
     throw new Error(`unknown group_by: ${group_by as string}`);
@@ -122,7 +123,7 @@ export function toolCallStats(options: {
     throw new Error(`unknown period: ${period as string}`);
   }
 
-  return iterateToolCallStats(group_by, period, signal);
+  return iterateToolCallStats(group_by, period, projectId ?? null, signal);
 }
 
 /** Map period -> literal interval string used inside the SQL predicate. */
@@ -153,7 +154,11 @@ function periodIntervalLiteral(period: ToolCallPeriod): string | null {
  * (and so the SQL shape stays consistent). The period predicate is appended
  * conditionally based on `period`.
  */
-function buildSql(group_by: ToolCallGroupBy, period: ToolCallPeriod): string {
+function buildSql(
+  group_by: ToolCallGroupBy,
+  period: ToolCallPeriod,
+  projectId: string | null,
+): { sql: string; params: unknown[] } {
   let groupExpr: string;
   let joinSessions = "";
   switch (group_by) {
@@ -173,12 +178,29 @@ function buildSql(group_by: ToolCallGroupBy, period: ToolCallPeriod): string {
   }
 
   const intervalLit = periodIntervalLiteral(period);
-  const whereClause =
-    intervalLit !== null
-      ? `WHERE t.timestamp::timestamptz >= now() - '${intervalLit}'::interval`
-      : "";
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
 
-  return `
+  if (intervalLit !== null) {
+    conditions.push(
+      `t.timestamp::timestamptz >= now() - '${intervalLit}'::interval`,
+    );
+  }
+
+  if (projectId !== null) {
+    if (joinSessions === "") {
+      joinSessions = "JOIN sessions s ON s.id = t.session_id";
+    }
+    conditions.push(`s.project_id = $${idx++}`);
+    params.push(projectId);
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return {
+    sql: `
     SELECT
       ${groupExpr} AS group_key,
       COUNT(*)::bigint AS total_calls,
@@ -194,20 +216,23 @@ function buildSql(group_by: ToolCallGroupBy, period: ToolCallPeriod): string {
     ${joinSessions}
     ${whereClause}
     GROUP BY ${groupExpr}
-  `;
+  `,
+    params,
+  };
 }
 
 async function* iterateToolCallStats(
   group_by: ToolCallGroupBy,
   period: ToolCallPeriod,
+  projectId: string | null,
   signal: AbortSignal | undefined,
 ): AsyncGenerator<ToolCallStatsRow, void, void> {
   // Pre-iteration abort check — must fire before any DB I/O.
   throwIfAborted(signal);
 
   const pool = getPool();
-  const sql = buildSql(group_by, period);
-  const result = await pool.query(sql);
+  const { sql, params } = buildSql(group_by, period, projectId);
+  const result = await pool.query(sql, params);
 
   for (const row of result.rows) {
     // Per-yield abort check — mid-iteration abort raises on the next yield.

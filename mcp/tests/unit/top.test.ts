@@ -278,7 +278,7 @@ describe("D-C7-3 topTool handler — signal threading + project_id override", ()
 
     await expect(
       topTool.handler({ dimension: "repository" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

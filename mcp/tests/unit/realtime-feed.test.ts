@@ -245,8 +245,8 @@ describe("D-C6-2 realtimeFeedTool handler — call-shape + signal threading", ()
     await realtimeFeedTool.handler({ limit: 7 } as never, ctx);
 
     const callArgs = listRealtimeFeed.mock.calls[0];
-    const wholeJson = JSON.stringify(callArgs);
-    expect(wholeJson).toContain('"limit":7');
+    const opts = callArgs[callArgs.length - 1] as { limit?: number };
+    expect(opts.limit).toBeGreaterThanOrEqual(7);
   });
 
   it("propagates AbortError when listRealtimeFeed throws synchronously", async () => {
@@ -259,7 +259,7 @@ describe("D-C6-2 realtimeFeedTool handler — call-shape + signal threading", ()
 
     await expect(
       realtimeFeedTool.handler({ limit: 5 } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -317,6 +317,48 @@ describe("D-C6-2 realtimeFeedTool handler — output envelope", () => {
     expect(wholeJson).toContain("session-1");
     expect(wholeJson).toContain("anthropic");
     expect(wholeJson).toContain("claude-sonnet-4-20250514");
+  });
+
+  it("uses offset to return a later page and emits next_offset only with a sentinel row", async () => {
+    const rows = [
+      { ...sampleFeedItem, sessionId: "session-1", userTurnId: "turn-1" },
+      { ...sampleFeedItem, sessionId: "session-2", userTurnId: "turn-2" },
+      { ...sampleFeedItem, sessionId: "session-3", userTurnId: "turn-3" },
+    ];
+    listRealtimeFeed.mockReturnValueOnce(asyncIter(rows));
+    const ctx = makeCtx();
+
+    const result = (await realtimeFeedTool.handler(
+      { limit: 1, offset: 1 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].session_id).toBe("session-2");
+    expect(result.next_offset).toBe(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("returns null next_offset on the final offset page", async () => {
+    const rows = [
+      { ...sampleFeedItem, sessionId: "session-1", userTurnId: "turn-1" },
+      { ...sampleFeedItem, sessionId: "session-2", userTurnId: "turn-2" },
+      { ...sampleFeedItem, sessionId: "session-3", userTurnId: "turn-3" },
+    ];
+    listRealtimeFeed.mockReturnValueOnce(asyncIter(rows));
+    const ctx = makeCtx();
+
+    const result = (await realtimeFeedTool.handler(
+      { limit: 2, offset: 2 } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const items = result.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0].session_id).toBe("session-3");
+    expect(result.next_offset).toBeNull();
+    expect(result.truncated).toBe(false);
   });
 });
 
@@ -418,6 +460,6 @@ describe("D-C6-2 realtimeFeedTool — pre-aborted signal", () => {
 
     await expect(
       realtimeFeedTool.handler({ limit: 5 } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

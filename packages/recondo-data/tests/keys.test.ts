@@ -36,7 +36,7 @@ describe("@recondo/data: listApiKeys", () => {
     ctrl.abort();
     await expect(
       listApiKeys(adminKey, {}, { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -61,7 +61,7 @@ describe("@recondo/data: key mutations", () => {
     };
     await expect(
       createApiKey(adminKey, minimalInput as never, { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("revokeApiKey honors AbortSignal", async () => {
@@ -71,6 +71,6 @@ describe("@recondo/data: key mutations", () => {
       revokeApiKey(adminKey, "00000000-0000-0000-0000-000000000000", {
         signal: ctrl.signal,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

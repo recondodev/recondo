@@ -8,21 +8,26 @@
  *     env}}}`. (Identical wire shape per Plan D §Task 26.)
  *   - `goose` → `{extensions: {recondo: {type: "stdio", cmd, env}}}`.
  *
- * Per the C0 audit (Decision 3, Option A) the legacy `--scoped
- * <project_id>` flag is DROPPED in v1: this emitter does not mint API
- * keys, does not contact the DB, and never injects `RECONDO_API_KEY`
- * into the emitted env. Operators paste their own key into the
- * generated config file.
+ * When the binary handles `--scoped <project_id>`, it mints a scoped
+ * key before calling this emitter and passes that raw secret via
+ * `apiKey`. Normal config emission remains DB-free and never includes
+ * `RECONDO_API_KEY` unless the caller supplies `apiKey`.
  *
  * The `env` object only includes vars that are actually set in the
- * input environment — no empty-string injection. The two interesting
- * vars right now are `DATABASE_URL` and `RECONDO_OBJECT_STORE_PATH`.
+ * input environment — no empty-string injection. The propagated vars are
+ * runtime DB/object-store settings plus local-dev toggles.
  */
 
 export type RegistrationFlavor = "claude-code" | "cursor" | "goose";
 
 export interface RegistrationOptions {
   client: RegistrationFlavor;
+  flags?: {
+    allowActions?: boolean;
+    allowDestructive?: boolean;
+  };
+  includeArgs?: boolean;
+  apiKey?: string;
   /**
    * Optional env override — defaults to `process.env`. Tests pass an
    * explicit env so they can isolate the read from the harness.
@@ -34,9 +39,21 @@ export interface RegistrationOptions {
 const PROPAGATED_ENV_VARS = [
   "DATABASE_URL",
   "RECONDO_OBJECT_STORE_PATH",
+  "RECONDO_DEV_BYPASS",
+  "RECONDO_DATA_DIR",
+  "RECONDO_OBJECTS",
+  "NODE_ENV",
 ] as const;
 
 const COMMAND = "recondo-mcp";
+
+function buildArgs(options: RegistrationOptions): string[] {
+  if (!options.includeArgs) return [];
+  const out: string[] = [];
+  if (options.flags?.allowActions) out.push("--allow-actions");
+  if (options.flags?.allowDestructive) out.push("--allow-destructive");
+  return out;
+}
 
 function buildEnvBlock(env: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {};
@@ -52,6 +69,10 @@ function buildEnvBlock(env: NodeJS.ProcessEnv): Record<string, string> {
 export function emitRegistrationJson(options: RegistrationOptions): string {
   const env = options.env ?? process.env;
   const envBlock = buildEnvBlock(env);
+  if (options.apiKey && options.apiKey.length > 0) {
+    envBlock.RECONDO_API_KEY = options.apiKey;
+  }
+  const args = buildArgs(options);
 
   let payload: Record<string, unknown>;
   switch (options.client) {
@@ -61,6 +82,7 @@ export function emitRegistrationJson(options: RegistrationOptions): string {
         mcpServers: {
           recondo: {
             command: COMMAND,
+            args,
             env: envBlock,
           },
         },
@@ -70,8 +92,11 @@ export function emitRegistrationJson(options: RegistrationOptions): string {
       payload = {
         extensions: {
           recondo: {
+            name: "recondo",
+            enabled: true,
             type: "stdio",
             cmd: COMMAND,
+            args,
             env: envBlock,
           },
         },

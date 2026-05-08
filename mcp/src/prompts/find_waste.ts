@@ -15,7 +15,9 @@ import { userMessage } from "./types.js";
 
 const BODY = `You are hunting for duplicated, wasted, or redundant prompt traffic that the developer could deduplicate or cache.
 
-Call \`recondo_find_similar_prompts\` to retrieve groups of repeat prompts in the recent activity window. Pass \`{"period": "last_7_days", "min_repeats": 2}\` (or the equivalent default range if no period argument is exposed).
+Call \`recondo_list_sessions\` first to pick recent candidate sessions. Use tool: \`recondo_list_sessions\`, args: \`{"limit":10}\`.
+
+Then call \`recondo_find_similar_prompts\` for exact prompt bodies worth checking. Use tool: \`recondo_find_similar_prompts\`, args: \`{"text":"<paste_exact_prompt_text_to_check>","limit":20}\`.
 
 Important caveat — surface this in your reply: the v1 similarity matcher is **exact-match only** on the prompt hash. It detects byte-identical user requests; near-duplicates (paraphrases, trailing whitespace, different line endings) will NOT be flagged. If the tool returns no matches, that means there were no byte-identical repeats, NOT that the developer's prompts are necessarily unique.
 

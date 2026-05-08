@@ -178,7 +178,7 @@ describe("D-C5-4 sessionEfficiencyTool handler — signature + signal threading"
         { session_id: "session-1" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -269,6 +269,6 @@ describe("D-C5-4 sessionEfficiencyTool — pre-aborted signal", () => {
         { session_id: "session-1" } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

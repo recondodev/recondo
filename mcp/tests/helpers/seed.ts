@@ -1,8 +1,8 @@
 /**
  * D-C2-2 — Test seed harness for the MCP integration suite.
  *
- * Truncates the captured tables (tool_calls, attachments, turns,
- * sessions) inside a transaction wrapped with `SET LOCAL
+ * Truncates the captured tables (tool_calls, attachments,
+ * anomaly_events, turns, sessions) inside a transaction wrapped with `SET LOCAL
  * recondo.gdpr_bypass = 'true'` so the SOC 2 PI1 immutability
  * triggers don't reject the DELETE. Then INSERTs the requested
  * fixtures and returns the resulting ids + a `cleanup()` that
@@ -118,6 +118,7 @@ export async function truncateCapturedTables(): Promise<void> {
     // not CASCADE, so we must clear children first.
     await client.query("DELETE FROM tool_calls");
     await client.query("DELETE FROM attachments");
+    await client.query("DELETE FROM anomaly_events");
     await client.query("DELETE FROM turns");
     await client.query("DELETE FROM sessions");
     await client.query("COMMIT");

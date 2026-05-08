@@ -47,6 +47,8 @@ export interface InsertAuditLogEntry {
   responseBytes: number;
   clientName?: string | null;
   keyId?: string | null;
+  outcome?: "success" | "error" | "aborted";
+  errorMessage?: string | null;
   requestedAt?: Date;
 }
 
@@ -71,18 +73,22 @@ export async function insertAuditLog(
   const args = entry.arguments ?? {};
   const clientName = entry.clientName ?? null;
   const keyId = entry.keyId ?? null;
+  const outcome = entry.outcome ?? "success";
+  const errorMessage = entry.errorMessage ?? null;
 
   if (entry.requestedAt !== undefined) {
     await pool.query(
       `INSERT INTO audit_log
-         (tool_name, arguments, response_bytes, client_name, key_id, requested_at)
-       VALUES ($1, $2::jsonb, $3, $4, $5, $6)`,
+         (tool_name, arguments, response_bytes, client_name, key_id, outcome, error_message, requested_at)
+       VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8)`,
       [
         entry.toolName,
         JSON.stringify(args),
         entry.responseBytes,
         clientName,
         keyId,
+        outcome,
+        errorMessage,
         entry.requestedAt,
       ],
     );
@@ -90,14 +96,16 @@ export async function insertAuditLog(
     // Omit requested_at so the DB DEFAULT now() fires.
     await pool.query(
       `INSERT INTO audit_log
-         (tool_name, arguments, response_bytes, client_name, key_id)
-       VALUES ($1, $2::jsonb, $3, $4, $5)`,
+         (tool_name, arguments, response_bytes, client_name, key_id, outcome, error_message)
+       VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7)`,
       [
         entry.toolName,
         JSON.stringify(args),
         entry.responseBytes,
         clientName,
         keyId,
+        outcome,
+        errorMessage,
       ],
     );
   }

@@ -660,9 +660,10 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "SOC 2 Type II",
-          periodStart,
-          periodEnd,
+          type: "COMPLIANCE",
+          period: "MONTH",
+          from: periodStart,
+          to: periodEnd,
         },
       },
     });
@@ -676,7 +677,7 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
 
     const report = payload.report;
     expect(typeof report.id).toBe("string");
-    expect(report.framework).toBe("SOC 2 Type II");
+    expect(report.framework).toBe("compliance");
     expect(typeof report.periodStart).toBe("string");
     expect(typeof report.periodEnd).toBe("string");
     expect(typeof report.captureCount).toBe("number");
@@ -694,9 +695,10 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "ISO 42001",
-          periodStart,
-          periodEnd,
+          type: "COMPLIANCE",
+          period: "WEEK",
+          from: periodStart,
+          to: periodEnd,
         },
       },
     });
@@ -720,9 +722,10 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "SOC 2 Type II",
-          periodStart,
-          periodEnd,
+          type: "COMPLIANCE",
+          period: "WEEK",
+          from: periodStart,
+          to: periodEnd,
         },
       },
     });
@@ -743,9 +746,10 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "NIST AI RMF",
-          periodStart,
-          periodEnd,
+          type: "COMPLIANCE",
+          period: "WEEK",
+          from: periodStart,
+          to: periodEnd,
         },
       },
     });
@@ -768,15 +772,15 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
   });
 
   it("returns validation error for missing required fields", async () => {
-    // Missing periodEnd -- GraphQL should reject at validation
+    // Missing period -- GraphQL should reject at validation
     const { body } = await graphql({
       apiKey: API_KEYS.admin,
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "SOC 2 Type II",
-          periodStart: new Date().toISOString(),
-          // periodEnd is missing
+          type: "COMPLIANCE",
+          from: new Date().toISOString(),
+          // period is missing
         },
       },
     });
@@ -787,15 +791,16 @@ describe("D6.1 -- generateReport mutation creates report with hash", () => {
     expect(hasError).toBe(true);
   });
 
-  it("returns error when periodStart is after periodEnd", async () => {
+  it("returns error when from is after to", async () => {
     const { body } = await graphql({
       apiKey: API_KEYS.admin,
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "SOC 2 Type II",
-          periodStart: new Date().toISOString(),
-          periodEnd: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+          type: "COMPLIANCE",
+          period: "MONTH",
+          from: new Date().toISOString(),
+          to: new Date(Date.now() - 30 * 86_400_000).toISOString(),
         },
       },
     });
@@ -817,9 +822,10 @@ describe("D6.1 -- generateReport requires authentication", () => {
       query: GENERATE_REPORT_MUTATION,
       variables: {
         input: {
-          framework: "SOC 2 Type II",
-          periodStart: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-          periodEnd: new Date().toISOString(),
+          type: "COMPLIANCE",
+          period: "MONTH",
+          from: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+          to: new Date().toISOString(),
         },
       },
     });

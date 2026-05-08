@@ -7,8 +7,8 @@
  * binary isn't built.
  *
  * Tool spawn flag matrix:
- *   - non-destructive (5): spawnMcp({ args: ["--allow-actions"] })
- *   - destructive (2):     spawnMcp({ args: ["--allow-actions", "--allow-destructive"] })
+ *   - non-destructive (5): spawnMcp({ devBypass: true, args: ["--allow-actions"] })
+ *   - destructive (2):     spawnMcp({ devBypass: true, args: ["--allow-actions", "--allow-destructive"] })
  *
  * NB: every test uses unique random ids so concurrent runs don't
  * collide. Each `afterAll` cleans up its seeded rows.
@@ -55,20 +55,21 @@ describeIfReady("D-C10-1 recondo_generate_report (integration)", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
   });
 
   afterAll(async () => {
     await mcp?.close();
   });
 
-  it("generates a soc2 report and returns { report, errors } payload", async () => {
+  it("generates a weekly cost report and returns { report, errors } payload", async () => {
     const result = await mcp.request<CallToolResult>("tools/call", {
       name: "recondo_generate_report",
       arguments: {
-        framework: "soc2",
-        period_start: "2026-01-01T00:00:00Z",
-        period_end: "2026-04-01T00:00:00Z",
+        type: "weekly_cost",
+        period: "week",
+        from: "2026-01-01T00:00:00Z",
+        to: "2026-04-01T00:00:00Z",
       },
     });
     expect(result.isError).not.toBe(true);
@@ -87,7 +88,7 @@ describeIfReady("D-C10-2 recondo_update_control_status (integration)", () => {
   const controlId = `ctrl-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(
@@ -119,7 +120,7 @@ describeIfReady("D-C10-2 recondo_update_control_status (integration)", () => {
       name: "recondo_update_control_status",
       arguments: {
         control_id: controlId,
-        new_status: "PASSING",
+        new_status: "compliant",
         reason: "remediation complete",
       },
     });
@@ -139,7 +140,7 @@ describeIfReady("D-C10-3 recondo_create_policy (integration)", () => {
   let createdId: string | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
   });
 
   afterAll(async () => {
@@ -186,7 +187,7 @@ describeIfReady("D-C10-4 recondo_update_policy (integration)", () => {
   const initialName = `tw-update-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(
@@ -233,7 +234,7 @@ describeIfReady("D-C10-5 recondo_register_key (integration)", () => {
   let createdId: string | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
   });
 
   afterAll(async () => {
@@ -276,7 +277,7 @@ describeIfReady("D-C10-6 recondo_delete_policy (integration, DESTRUCTIVE)", () =
   const policyId = `pol-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions", "--allow-destructive"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions", "--allow-destructive"] });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(
@@ -326,7 +327,7 @@ describeIfReady("D-C10-7 recondo_delete_key (integration, DESTRUCTIVE)", () => {
   const fingerprint = `fp-rev-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions", "--allow-destructive"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions", "--allow-destructive"] });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(

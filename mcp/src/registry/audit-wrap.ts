@@ -1,19 +1,15 @@
 /**
  * Audit-log wrapper for read-tool handlers.
  *
- * Wraps a `ReadTool.handler` so the audit row is appended AFTER the
- * tool's data fetch resolves. This ordering matters: `responseBytes`
- * must reflect the actual serialised response size, so the wrap has
- * to run post-fetch.
- *
- * Per orchestration Lesson 4, audit failures are swallowed inside
- * `writeAuditEntry` (the writer behind `AuditWriter.write`). We rely
- * on that contract — this wrapper does NOT add a try/catch of its
- * own. If the underlying writer ever changed to throw, propagating
- * the error here would surface the bug instead of hiding it.
+ * Wraps a `ReadTool.handler` so the audit row is appended for success,
+ * error, and aborted calls. The audit write happens in `finally`: a
+ * failed handler is still compliance evidence, and the original error is
+ * re-thrown after the audit writer finishes.
  */
 
 import type { ActionTool, ReadTool, ToolContext } from "./types.js";
+
+type AuditOutcome = "success" | "error" | "aborted";
 
 export type ReadToolHandler<TInput, TOutput> = (
   input: TInput,
@@ -29,19 +25,7 @@ export function withAuditLog<TInput, TOutput>(
   tool: ReadTool<TInput, TOutput>,
 ): ReadToolHandler<TInput, TOutput> {
   return async (input, ctx) => {
-    const result = await tool.handler(input, ctx);
-    const responseBytes = JSON.stringify(result ?? null).length;
-    await ctx.audit.write(
-      {
-        toolName: tool.name,
-        arguments: input,
-        responseBytes,
-        clientName: ctx.clientInfo?.name ?? null,
-        keyId: ctx.auth.keyId,
-      },
-      { signal: ctx.abortSignal },
-    );
-    return result;
+    return runWithAudit(tool, input, ctx);
   };
 }
 
@@ -55,8 +39,36 @@ export function withActionAuditLog<TInput, TOutput>(
   tool: ActionTool<TInput, TOutput>,
 ): ActionToolHandler<TInput, TOutput> {
   return async (input, ctx) => {
+    return runWithAudit(tool, input, ctx);
+  };
+}
+
+async function runWithAudit<TInput, TOutput>(
+  tool: ReadTool<TInput, TOutput> | ActionTool<TInput, TOutput>,
+  input: TInput,
+  ctx: ToolContext,
+): Promise<TOutput> {
+  let outcome: AuditOutcome = "success";
+  let errorMessage: string | null = null;
+  let responseBytes = 0;
+
+  try {
     const result = await tool.handler(input, ctx);
-    const responseBytes = JSON.stringify(result ?? null).length;
+    responseBytes = result == null ? 0 : JSON.stringify(result).length;
+    return result;
+  } catch (err) {
+    const isAbort =
+      err instanceof Error && err.name === "AbortError";
+    outcome = isAbort ? "aborted" : "error";
+    errorMessage = isAbort
+      ? "AbortError"
+      : err instanceof Error
+        ? err.message
+        : String(err);
+    throw err;
+  } finally {
+    const auditOptions =
+      outcome === "aborted" ? undefined : { signal: ctx.abortSignal };
     await ctx.audit.write(
       {
         toolName: tool.name,
@@ -64,9 +76,10 @@ export function withActionAuditLog<TInput, TOutput>(
         responseBytes,
         clientName: ctx.clientInfo?.name ?? null,
         keyId: ctx.auth.keyId,
+        outcome,
+        errorMessage,
       },
-      { signal: ctx.abortSignal },
+      auditOptions,
     );
-    return result;
-  };
+  }
 }

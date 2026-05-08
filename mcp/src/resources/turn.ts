@@ -66,36 +66,35 @@ export const turnResource: ResourceDefinition = {
     const sessionId = turn.sessionId;
     const turnId = turn.id;
 
-    const captured: Record<string, unknown> = {};
-    if (turn.userRequestText) {
-      captured.user = buildMessageEnvelope(
+    const body = { ...(turn as unknown as Record<string, unknown>) };
+
+    const userText = body.userRequestText;
+    if (typeof userText === "string") {
+      body.userRequestText = buildMessageEnvelope(
         "user",
         sessionId,
         turnId,
-        turn.userRequestText,
+        userText,
       );
     }
-    if (turn.responseText) {
-      captured.assistant = buildMessageEnvelope(
+    const responseText = body.responseText;
+    if (typeof responseText === "string") {
+      body.responseText = buildMessageEnvelope(
         "assistant",
         sessionId,
         turnId,
-        turn.responseText,
+        responseText,
       );
     }
-    if (turn.thinkingText) {
-      captured.assistant_thinking = buildMessageEnvelope(
+    const thinkingText = body.thinkingText;
+    if (typeof thinkingText === "string") {
+      body.thinkingText = buildMessageEnvelope(
         "assistant_thinking",
         sessionId,
         turnId,
-        turn.thinkingText,
+        thinkingText,
       );
     }
-
-    const body = {
-      turn,
-      captured,
-    };
 
     return {
       contents: [

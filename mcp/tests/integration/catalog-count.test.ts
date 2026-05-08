@@ -3,18 +3,18 @@
  *
  * Spawn the recondo-mcp binary in stdio mode WITHOUT any action flags
  * (default mode), call `tools/list`, and assert:
- *   1. exactly 27 tools are advertised (matches READ_TOOLS.length unit
+ *   1. exactly 28 tools are advertised (matches READ_TOOLS.length unit
  *      assertion). C10 ships action tools — but they only appear with
- *      `--allow-actions`, so the default-mode count for C9 stays 27.
+ *      `--allow-actions`, so the default-mode count stays 28.
  *   2. every tool's description length >= 50 chars.
  *   3. every tool's name matches /^recondo_[a-z_]+$/ AND starts with
  *      `recondo_`.
- *   4. the dropped `recondo_insights` tool is absent.
- *   5. the two new C9 tools are present:
+ *   4. the restored `recondo_insights` tool is present.
+ *   5. the C9 tools are present:
  *        - recondo_policies
  *        - recondo_registered_keys
  *
- * After C10 (without `--allow-actions`), the count stays 27. With
+ * After C10 (without `--allow-actions`), the count stays 28. With
  * `--allow-actions`, the count rises by N action tools — that test
  * lives in C10's action_gating integration. C9 only pins the default-
  * mode count.
@@ -70,12 +70,13 @@ const EXPECTED_READ_TOOLS = [
   "recondo_agent_framework_distribution",
   "recondo_top",
   "recondo_tool_call_stats",
-  // C8 — audit / anomaly / compliance / reports (5 total, insights dropped).
+  // C8/hardening — audit / anomaly / compliance / reports / insights.
   "recondo_audit_trail",
   "recondo_anomalies",
   "recondo_compliance",
   "recondo_reports",
   "recondo_report_trends",
+  "recondo_insights",
   // C9 — policy + key reads.
   "recondo_policies",
   "recondo_registered_keys",
@@ -87,16 +88,16 @@ describeIfReady("D-C9-3 tools/list catalog count (default mode)", () => {
   beforeAll(async () => {
     // Default mode — no `--allow-actions`. After C10 only read tools
     // appear in this configuration.
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
     await mcp?.close();
   });
 
-  it("advertises exactly 27 tools (25 from C8 + policies + registered_keys; insights dropped)", async () => {
+  it("advertises exactly 28 tools", async () => {
     const result = await mcp.request<{ tools: ToolDefinition[] }>("tools/list");
-    expect(result.tools.length).toBe(27);
+    expect(result.tools.length).toBe(28);
   });
 
   it("contains every expected read tool name", async () => {
@@ -105,10 +106,10 @@ describeIfReady("D-C9-3 tools/list catalog count (default mode)", () => {
     expect(actual).toEqual(EXPECTED_READ_TOOLS.slice().sort());
   });
 
-  it("does NOT advertise the dropped recondo_insights tool", async () => {
+  it("advertises the restored recondo_insights tool", async () => {
     const result = await mcp.request<{ tools: ToolDefinition[] }>("tools/list");
     const names = result.tools.map((t) => t.name);
-    expect(names).not.toContain("recondo_insights");
+    expect(names).toContain("recondo_insights");
   });
 
   it("includes the two new C9 tools", async () => {

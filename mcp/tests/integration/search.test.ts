@@ -64,7 +64,7 @@ describeIfReady("D-C4-1 recondo_search schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -112,7 +112,7 @@ describeIfReady("D-C4-2 / D-C4-3 recondo_search end-to-end", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -251,5 +251,57 @@ describeIfReady("D-C4-2 / D-C4-3 recondo_search end-to-end", () => {
     const closingMatches = wholeJson.match(/<\/captured_user_message>/g) ?? [];
     expect(closingMatches.length).toBe(1);
     expect(wholeJson).toContain("&lt;/captured_user_message&gt;");
+  });
+
+  it("returns a usable next_offset that advances to new search matches", async () => {
+    const sessionId = randomUUID();
+    const token = `search-cursor-token-${randomUUID()}`;
+    const turns = Array.from({ length: 7 }, (_, i) => ({
+      id: randomUUID(),
+      sessionId,
+      sequenceNum: i + 1,
+      timestamp: `2026-05-07T00:00:0${i}.000Z`,
+      userRequestText: `${token} match ${i}`,
+      responseText: "ack",
+    }));
+
+    if (seeded) await seeded.cleanup();
+    seeded = await seedTestDb({
+      sessions: [{ id: sessionId, framework: "claude-code" }],
+      turns,
+    });
+
+    const first = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_search",
+      arguments: { query: token, scope: "prompt", limit: 2 },
+    });
+    expect(first.isError).not.toBe(true);
+    const env1 = extractEnvelope(first);
+    expect(env1.next_offset).toBe(2);
+    expect(env1.truncated).toBe(true);
+
+    const second = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_search",
+      arguments: { query: token, scope: "prompt", limit: 2, offset: 2 },
+    });
+    expect(second.isError).not.toBe(true);
+    const env2 = extractEnvelope(second);
+    const firstIds = new Set(
+      (env1.items as Array<{ turn_id: string }>).map((item) => item.turn_id),
+    );
+    const secondIds = (env2.items as Array<{ turn_id: string }>).map(
+      (item) => item.turn_id,
+    );
+    expect(secondIds.some((id) => firstIds.has(id))).toBe(false);
+
+    const final = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_search",
+      arguments: { query: token, scope: "prompt", limit: 2, offset: 6 },
+    });
+    expect(final.isError).not.toBe(true);
+    const env3 = extractEnvelope(final);
+    expect((env3.items as unknown[]).length).toBe(1);
+    expect(env3.next_offset).toBeNull();
+    expect(env3.truncated).toBe(false);
   });
 });

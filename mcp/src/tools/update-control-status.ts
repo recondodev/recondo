@@ -1,6 +1,6 @@
 /**
  * `recondo_update_control_status` — action tool that transitions a
- * compliance control's status (PASSING / FAILING / PENDING / ...).
+ * compliance control's status (compliant / non_compliant / in_review).
  *
  * Wraps the data-layer helper `updateControlStatus(apiKey, input,
  * options)`. Maps the MCP-facing `control_id` / `new_status` fields
@@ -18,7 +18,7 @@ import { INJECTION_WARNING } from "../registry/warning.js";
 
 const inputShape = {
   control_id: z.string(),
-  new_status: z.string(),
+  new_status: z.enum(["compliant", "non_compliant", "in_review"]),
   reason: z.string().optional(),
   project_id: z.string().optional(),
 };
@@ -29,9 +29,9 @@ export type UpdateControlStatusInput = z.infer<
 >;
 
 const DESCRIPTION =
-  "Transition a compliance control (e.g. CC1.1) to a new status with a " +
-  "human-readable reason. Records an entry in the compliance audit " +
-  "log. Returns `{ control, errors }`. " +
+  "Transition a compliance control (e.g. CC1.1) to compliant, " +
+  "non_compliant, or in_review with a human-readable reason. Records " +
+  "an entry in the compliance audit log. Returns `{ control, errors }`. " +
   INJECTION_WARNING;
 
 function authContextToApiKey(

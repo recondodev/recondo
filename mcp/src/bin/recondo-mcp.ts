@@ -11,6 +11,7 @@
  * non-zero rather than dispatching.
  */
 
+import { mintScopedKey } from "@recondo/data";
 import { logger } from "../util/logger.js";
 import { parseFlags } from "../config/flags.js";
 import { loadEnvConfig } from "../config/env.js";
@@ -50,7 +51,20 @@ async function main(): Promise<void> {
             .join(" ")}`,
         );
       }
-      const json = emitRegistrationJson({ client: flavor });
+      let apiKey: string | undefined;
+      if (flags.scopedProjectId) {
+        const minted = await mintScopedKey({
+          projectId: flags.scopedProjectId,
+          name: `mcp-${flavor}-${Date.now()}`,
+        });
+        apiKey = minted.rawSecret;
+      }
+      const json = emitRegistrationJson({
+        client: flavor,
+        includeArgs: flags.emitArgs,
+        flags,
+        apiKey,
+      });
       process.stdout.write(json + "\n");
       process.exit(0);
     } catch (err) {

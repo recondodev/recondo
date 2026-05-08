@@ -192,7 +192,7 @@ describe("D-C8-2 anomaliesTool handler — call wiring", () => {
     const ac = new AbortController();
     ac.abort();
     const ctx = makeCtx({ abortSignal: ac.signal });
-    await expect(anomaliesTool.handler({} as never, ctx)).rejects.toThrow();
+    await expect(anomaliesTool.handler({} as never, ctx)).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

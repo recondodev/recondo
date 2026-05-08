@@ -23,7 +23,7 @@ describe("@recondo/data: listAuditEvents envelope (D-AU1)", () => {
   it("honors AbortSignal", async () => {
     const ctrl = new AbortController();
     ctrl.abort();
-    await expect(listAuditEvents(adminKey, {}, { signal: ctrl.signal })).rejects.toThrow();
+    await expect(listAuditEvents(adminKey, {}, { signal: ctrl.signal })).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

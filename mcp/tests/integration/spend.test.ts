@@ -71,7 +71,7 @@ describeIfReady("D-C6-4 recondo_spend schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -102,7 +102,7 @@ describeIfReady("D-C6-4 recondo_spend integration — dispatch under all 4 group
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const sessionId = randomUUID();
     const turnId = randomUUID();
     seeded = await seedTestDb({

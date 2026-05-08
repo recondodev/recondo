@@ -43,15 +43,17 @@ import { searchTurns } from "@recondo/data";
 import type { ApiKeyInfo, MappedTurn } from "@recondo/data";
 import { z } from "zod";
 
-import { buildListEnvelope } from "../envelope/list.js";
 import {
   buildMessageEnvelope,
   type MessageEnvelope,
   type Role,
 } from "../envelope/messages.js";
-import { enforceListBudget } from "../envelope/truncate.js";
 import type { AuthContext } from "../auth/context.js";
 import type { ReadTool } from "../registry/types.js";
+import {
+  buildBudgetedOffsetEnvelope,
+  collectOffsetPage,
+} from "./pagination.js";
 
 const inputShape = {
   query: z.string().min(1),
@@ -161,25 +163,17 @@ export const searchTool: ReadTool<SearchInput, unknown> = {
     const offset = input.offset ?? 0;
     const limit = input.limit ?? 20;
 
-    const matches: SearchMatch[] = [];
     const iterable = searchTurns(apiKey, input.query, input.project_id ?? null, {
-      limit,
-      offset,
+      limit: offset + limit + 1,
+      offset: 0,
       signal: ctx.abortSignal,
     });
-    for await (const turn of iterable) {
-      if (ctx.abortSignal?.aborted) {
-        throw new DOMException("aborted", "AbortError");
-      }
-      matches.push(projectMatch(turn, input.scope));
-      if (matches.length >= limit) break;
-    }
-
-    const truncated = enforceListBudget(matches, offset, JSON.stringify);
-    return buildListEnvelope({
-      items: truncated.items,
-      nextOffset: truncated.nextOffset,
-      truncated: truncated.truncated,
+    const page = await collectOffsetPage(iterable, {
+      offset,
+      limit,
+      signal: ctx.abortSignal,
+      project: (turn) => projectMatch(turn, input.scope),
     });
+    return buildBudgetedOffsetEnvelope(page, offset, JSON.stringify);
   },
 };

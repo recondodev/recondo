@@ -101,6 +101,7 @@ describe("D-C1-8 writeAuditEntry", () => {
     const allArgs = warn.mock.calls.flat();
     const stringified = JSON.stringify(allArgs);
     expect(stringified).toMatch(/db down/);
+    expect(stringified).toMatch(/audit_write_failed/);
     expect(stringified).toMatch(/audit insert failed/);
   });
 });

@@ -20,6 +20,8 @@ export interface AuditWriteEntry {
   responseBytes: number;
   clientName?: string | null;
   keyId?: string | null;
+  outcome?: "success" | "error" | "aborted";
+  errorMessage?: string | null;
 }
 
 export interface AuditWriteOptions {

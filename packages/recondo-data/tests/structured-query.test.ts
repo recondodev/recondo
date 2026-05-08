@@ -182,7 +182,7 @@ describe("@recondo/data: runStructuredQuery dispatcher", () => {
   it("throws for unknown queryType", async () => {
     await expect(
       runStructuredQuery("not-a-real-type", "test-project", {}, undefined, 10),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Unknown queryType: not-a-real-type/);
   });
 
   it("propagates AbortSignal through runStructuredQuery", async () => {

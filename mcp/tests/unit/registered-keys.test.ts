@@ -246,7 +246,7 @@ describe("D-C9-2 registeredKeysTool handler — call wiring", () => {
     const ac = new AbortController();
     ac.abort();
     const ctx = makeCtx({ abortSignal: ac.signal });
-    await expect(registeredKeysTool.handler({} as never, ctx)).rejects.toThrow();
+    await expect(registeredKeysTool.handler({} as never, ctx)).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

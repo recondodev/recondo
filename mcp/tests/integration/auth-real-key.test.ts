@@ -130,6 +130,7 @@ describeIfReady("D-C13-2 real-key project scoping", () => {
     mcp = await spawnMcp({
       env: {
         RECONDO_API_KEY: scopedToken,
+        RECONDO_OBJECT_STORE_PATH: "/tmp/recondo-objects",
         RECONDO_DEV_BYPASS: "",
         NODE_ENV: "production",
       },

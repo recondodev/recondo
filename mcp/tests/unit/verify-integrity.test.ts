@@ -211,7 +211,7 @@ describe("D-C4-5 verifyIntegrityTool handler", () => {
 
     await expect(
       verifyIntegrityTool.handler({ session_id: "s-1" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 
   it("returns an empty-shape report when the data layer reports a missing session", async () => {

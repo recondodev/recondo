@@ -52,6 +52,15 @@ describe("D-C1-6 loadEnvConfig", () => {
     ).toThrow(/RECONDO_API_KEY/);
   });
 
+  it("throws when RECONDO_DEV_BYPASS=1 but NODE_ENV is missing", () => {
+    expect(() =>
+      loadEnvConfig({
+        ...minimalRequired,
+        RECONDO_DEV_BYPASS: "1",
+      }),
+    ).toThrow(/RECONDO_API_KEY/);
+  });
+
   it("returns config when NODE_ENV=development and dev bypass=1, no API key", () => {
     const cfg = loadEnvConfig({
       ...minimalRequired,

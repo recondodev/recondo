@@ -489,7 +489,7 @@ export function listRealtimeFeed(
 
     let limit = options.limit ?? 20;
     if (limit <= 0) limit = 20;
-    if (limit > 100) limit = 100;
+    if (limit > 1000) limit = 1000;
     params.push(limit);
     const limitIdx = idx++;
 

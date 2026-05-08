@@ -6,9 +6,9 @@
  *
  *   | flags                                  | tool count | rationale                                                |
  *   |----------------------------------------|------------|----------------------------------------------------------|
- *   | (none)                                 | 27         | read tools only (matches D-C9-3)                         |
- *   | --allow-actions                        | 32         | 27 read + 5 non-destructive action tools                 |
- *   | --allow-actions --allow-destructive    | 34         | 27 read + 5 non-destructive + 2 destructive action tools |
+ *   | (none)                                 | 28         | read tools only (matches D-C9-3)                         |
+ *   | --allow-actions                        | 33         | 28 read + 5 non-destructive action tools                 |
+ *   | --allow-actions --allow-destructive    | 35         | 28 read + 5 non-destructive + 2 destructive action tools |
  *   | --allow-destructive  (alone)           | exit != 0  | parseFlags rejects (requires --allow-actions)            |
  *
  * The action-tool count is fixed at 7 (5 non-destructive + 2 destructive).
@@ -37,7 +37,7 @@ interface ToolDefinition {
   description?: string;
 }
 
-const READ_TOOL_COUNT = 27;
+const READ_TOOL_COUNT = 28;
 const NON_DESTRUCTIVE_ACTION_COUNT = 5;
 const DESTRUCTIVE_ACTION_COUNT = 2;
 
@@ -63,7 +63,7 @@ describeIfReady("D-C10-8 action-gating: default mode (no flags)", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -91,7 +91,7 @@ describeIfReady("D-C10-8 action-gating: --allow-actions only", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions"] });
   });
 
   afterAll(async () => {
@@ -129,7 +129,7 @@ describeIfReady("D-C10-8 action-gating: --allow-actions --allow-destructive", ()
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({ args: ["--allow-actions", "--allow-destructive"] });
+    mcp = await spawnMcp({ devBypass: true, args: ["--allow-actions", "--allow-destructive"] });
   });
 
   afterAll(async () => {

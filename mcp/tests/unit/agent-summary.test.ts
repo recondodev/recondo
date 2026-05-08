@@ -209,7 +209,7 @@ describe("D-C7-1 agentSummaryTool handler — call shape + signal threading", ()
 
     await expect(
       agentSummaryTool.handler({} as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

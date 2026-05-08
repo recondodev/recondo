@@ -160,8 +160,20 @@ describe("D-C6-4 spendInputSchema", () => {
     const parsed = spendInputSchema.parse({
       group_by: "provider",
       project_id: "proj-1",
-    }) as { project_id?: string };
+    }) as { project_id?: string; limit?: number; offset?: number };
     expect(parsed.project_id).toBe("proj-1");
+    expect(parsed.limit).toBe(20);
+    expect(parsed.offset).toBe(0);
+  });
+
+  it("schema accepts limit and offset", () => {
+    const parsed = spendInputSchema.parse({
+      group_by: "provider",
+      limit: 5,
+      offset: 10,
+    }) as { limit?: number; offset?: number };
+    expect(parsed.limit).toBe(5);
+    expect(parsed.offset).toBe(10);
   });
 });
 
@@ -271,6 +283,23 @@ describe("D-C6-4 spendTool handler — signal threading", () => {
     expect(opts.signal).toBe(ac.signal);
   });
 
+  it("forwards limit and offset to the dispatched data helper", async () => {
+    listSpendByProvider.mockResolvedValueOnce(emptyEnvelope);
+    const ctx = makeCtx();
+
+    await spendTool.handler(
+      { group_by: "provider", limit: 7, offset: 14 } as never,
+      ctx,
+    );
+
+    const opts = listSpendByProvider.mock.calls[0][2] as {
+      limit?: number;
+      offset?: number;
+    };
+    expect(opts.limit).toBe(7);
+    expect(opts.offset).toBe(14);
+  });
+
   it("propagates AbortError when the dispatched call rejects", async () => {
     listSpendByModel.mockRejectedValueOnce(
       new DOMException("aborted", "AbortError"),
@@ -281,7 +310,7 @@ describe("D-C6-4 spendTool handler — signal threading", () => {
 
     await expect(
       spendTool.handler({ group_by: "model" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 

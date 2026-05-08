@@ -45,7 +45,7 @@ export interface PolicyRow {
 }
 
 export interface PolicyFilter {
-  // Placeholder for future filters; the policies list does not yet take any.
+  policyId?: string;
 }
 
 export interface PolicyTrendPoint {
@@ -83,7 +83,7 @@ function mapPolicyRow(row: Record<string, unknown>): PolicyRow {
 
 export async function listPolicies(
   apiKey: ApiKeyInfo,
-  _filter: PolicyFilter = {},
+  filter: PolicyFilter = {},
   options: ListOptions = {},
 ): Promise<ListEnvelope<PolicyRow> & { total: number; limit: number; offset: number }> {
   if (options.signal?.aborted) {
@@ -103,6 +103,10 @@ export async function listPolicies(
   if (apiKey.projectId) {
     conditions.push(`project_id = $${idx++}`);
     params.push(apiKey.projectId);
+  }
+  if (filter.policyId) {
+    conditions.push(`id = $${idx++}`);
+    params.push(filter.policyId);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const countParams = [...params];
@@ -141,8 +145,8 @@ export async function listPolicies(
 }
 
 export async function listPolicyTriggerHistory(
-  _apiKey: ApiKeyInfo,
-  args: { days?: number } = {},
+  apiKey: ApiKeyInfo,
+  args: { days?: number; policyId?: string } = {},
   options: QueryOptions = {},
 ): Promise<ListEnvelope<PolicyTrendPoint>> {
   if (options.signal?.aborted) {
@@ -154,15 +158,28 @@ export async function listPolicyTriggerHistory(
   if (days < 1) days = 1;
   if (days > 365) days = 365;
 
+  const conditions = [`pt.triggered_at >= NOW() - ($1 || ' days')::INTERVAL`];
+  const params: unknown[] = [days];
+  let idx = 2;
+  if (apiKey.projectId) {
+    conditions.push(`p.project_id = $${idx++}`);
+    params.push(apiKey.projectId);
+  }
+  if (args.policyId) {
+    conditions.push(`pt.policy_id = $${idx++}`);
+    params.push(args.policyId);
+  }
+
   const result = await pool.query(
     `SELECT
-       TO_CHAR(triggered_at::date, 'YYYY-MM-DD') AS label,
+       TO_CHAR(pt.triggered_at::date, 'YYYY-MM-DD') AS label,
        COUNT(*)::int AS value
-     FROM policy_triggers
-     WHERE triggered_at >= NOW() - ($1 || ' days')::INTERVAL
-     GROUP BY triggered_at::date
-     ORDER BY triggered_at::date ASC`,
-    [days],
+     FROM policy_triggers pt
+     JOIN policies p ON p.id = pt.policy_id
+     WHERE ${conditions.join(" AND ")}
+     GROUP BY pt.triggered_at::date
+     ORDER BY pt.triggered_at::date ASC`,
+    params,
   );
 
   const items: PolicyTrendPoint[] = result.rows.map(

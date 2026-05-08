@@ -122,6 +122,7 @@ async function* iterateSimilar(
        )
          AND t.id != $1
          AND t.user_request_text IS NOT NULL
+       ORDER BY t.id ASC
        LIMIT $2`,
       [turnId, limit],
     );
@@ -157,6 +158,7 @@ async function* iterateSimilar(
        FROM turns t
        WHERE md5(t.user_request_text) = md5($1::text)
          AND t.user_request_text IS NOT NULL
+       ORDER BY t.id ASC
        LIMIT $2`,
       [text, limit],
     );

@@ -84,7 +84,7 @@ describeIfReady("D-C13-9 list-shape envelope contract", () => {
   const sharedPrompt = `c13-9-shared-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [{ id: sessionId, framework: "claude-code" }],
       turns: [
@@ -146,7 +146,7 @@ describeIfReady("D-C13-9 list-shape envelope contract", () => {
     ["recondo_agent_framework_distribution", { period: "week" }],
     ["recondo_audit_trail", { limit: 5 }],
     ["recondo_anomalies", { limit: 5 }],
-    ["recondo_compliance", { view: "frameworks", limit: 5 }],
+    ["recondo_compliance", { view: "frameworks" }],
     ["recondo_reports", { limit: 5 }],
     ["recondo_report_trends", { metric: "coverage" }],
     ["recondo_policies", { limit: 5 }],

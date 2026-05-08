@@ -5,7 +5,12 @@
  *   { items, next_offset, truncated, stream_id: null, is_final: true }
  *
  * `stream_id` is reserved for streaming variants (always null in v1).
- * `is_final` is literal `true` (every response is a final response).
+ * v2 streaming will use a stable `stream_id` to group notification
+ * chunks for one logical list response. Interim chunks will carry
+ * `is_final:false`; the terminal chunk will use the same envelope
+ * shape with `is_final:true`.
+ *
+ * v1 responses are not chunked, so `is_final` is literal `true`.
  */
 
 export interface ListEnvelope<T> {

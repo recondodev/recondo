@@ -68,7 +68,7 @@ describeIfReady("D-C8-2 recondo_anomalies schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -92,7 +92,7 @@ describeIfReady("D-C8-2 recondo_anomalies integration", () => {
   const anomalyId = `anom-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     seeded = await seedTestDb({
       sessions: [{ id: sessionId, framework: "claude-code" }],
       turns: [
@@ -152,5 +152,66 @@ describeIfReady("D-C8-2 recondo_anomalies integration", () => {
     const env = extractEnvelope(result);
     expectListEnvelope(env);
     expect(JSON.stringify(env)).toContain(anomalyId);
+  });
+
+  it("returns a usable next_offset that advances to new anomalies", async () => {
+    const { getPool } = await import("@recondo/data");
+    const pool = getPool();
+    const ids = Array.from({ length: 7 }, () => `anom-${randomUUID()}`);
+    for (const [i, id] of ids.entries()) {
+      await pool.query(
+        `INSERT INTO anomaly_events (id, session_id, turn_id, anomaly_type, severity, description, detected_at, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          id,
+          sessionId,
+          turnId,
+          "rate_limit",
+          "high",
+          `cursor anomaly ${i}`,
+          `2026-05-07T00:00:0${i}.000Z`,
+          "{}",
+        ],
+      );
+    }
+
+    try {
+      const first = await mcp.request<CallToolResult>("tools/call", {
+        name: "recondo_anomalies",
+        arguments: { limit: 2 },
+      });
+      expect(first.isError).not.toBe(true);
+      const env1 = extractEnvelope(first);
+      expect(env1.next_offset).toBe(2);
+      expect(env1.truncated).toBe(true);
+
+      const second = await mcp.request<CallToolResult>("tools/call", {
+        name: "recondo_anomalies",
+        arguments: { limit: 2, offset: 2 },
+      });
+      expect(second.isError).not.toBe(true);
+      const env2 = extractEnvelope(second);
+      const firstIds = new Set(
+        (env1.items as Array<{ id: string }>).map((item) => item.id),
+      );
+      const secondIds = (env2.items as Array<{ id: string }>).map(
+        (item) => item.id,
+      );
+      expect(secondIds.some((id) => firstIds.has(id))).toBe(false);
+
+      const final = await mcp.request<CallToolResult>("tools/call", {
+        name: "recondo_anomalies",
+        arguments: { limit: 2, offset: 6 },
+      });
+      expect(final.isError).not.toBe(true);
+      const env3 = extractEnvelope(final);
+      expect((env3.items as unknown[]).length).toBeGreaterThanOrEqual(1);
+      expect(env3.next_offset).toBeNull();
+      expect(env3.truncated).toBe(false);
+    } finally {
+      await pool.query(`DELETE FROM anomaly_events WHERE id = ANY($1::text[])`, [
+        ids,
+      ]);
+    }
   });
 });

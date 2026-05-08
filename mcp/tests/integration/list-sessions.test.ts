@@ -69,7 +69,7 @@ describeIfReady("D-C2-3 recondo_list_sessions schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -131,7 +131,7 @@ describeIfReady("D-C2-4 recondo_list_sessions integration", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -181,6 +181,47 @@ describeIfReady("D-C2-4 recondo_list_sessions integration", () => {
     expect(seen.has(idB)).toBe(true);
     expect(items.length).toBe(2);
   });
+
+  it("returns a usable next_offset that advances to new sessions", async () => {
+    const sessions = Array.from({ length: 7 }, (_, i) => ({
+      id: randomUUID(),
+      framework: "claude-code",
+      startedAt: `2026-05-07T00:00:0${i}.000Z`,
+    }));
+    if (seeded) await seeded.cleanup();
+    seeded = await seedTestDb({ sessions });
+
+    const first = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_list_sessions",
+      arguments: { limit: 2 },
+    });
+    expect(first.isError).not.toBe(true);
+    const env1 = extractEnvelope(first);
+    expect(env1.next_offset).toBe(2);
+    expect(env1.truncated).toBe(true);
+
+    const second = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_list_sessions",
+      arguments: { limit: 2, offset: env1.next_offset },
+    });
+    expect(second.isError).not.toBe(true);
+    const env2 = extractEnvelope(second);
+    const ids1 = new Set(
+      (env1.items as Array<{ id: string }>).map((item) => item.id),
+    );
+    const ids2 = (env2.items as Array<{ id: string }>).map((item) => item.id);
+    expect(ids2.some((id) => ids1.has(id))).toBe(false);
+
+    const final = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_list_sessions",
+      arguments: { limit: 2, offset: 6 },
+    });
+    expect(final.isError).not.toBe(true);
+    const env3 = extractEnvelope(final);
+    expect((env3.items as unknown[]).length).toBe(1);
+    expect(env3.next_offset).toBeNull();
+    expect(env3.truncated).toBe(false);
+  });
 });
 
 describeIfReady("D-C2-5 recondo_list_sessions truncation", () => {
@@ -188,7 +229,7 @@ describeIfReady("D-C2-5 recondo_list_sessions truncation", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

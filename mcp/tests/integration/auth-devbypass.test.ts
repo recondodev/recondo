@@ -59,10 +59,8 @@ describeIfReady("D-C13-1 dev-bypass auth", () => {
       // pool may already be closed; not fatal — the spawn driver
       // will just observe whatever is in the DB.
     }
-    // spawnMcp's defaults already inject RECONDO_DEV_BYPASS=1 and
-    // NODE_ENV=development. We force-clear RECONDO_API_KEY to prove
-    // dev-bypass works WITHOUT a key.
     mcp = await spawnMcp({
+      devBypass: true,
       env: {
         RECONDO_DEV_BYPASS: "1",
         NODE_ENV: "development",

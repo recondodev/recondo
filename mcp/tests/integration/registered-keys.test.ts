@@ -70,7 +70,7 @@ describeIfReady("D-C9-2 recondo_registered_keys schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -94,7 +94,7 @@ describeIfReady("D-C9-2 recondo_registered_keys integration", () => {
   const fingerprint = `fp-${randomUUID()}`;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
     const { getPool } = await import("@recondo/data");
     const pool = getPool();
     await pool.query(

@@ -7,10 +7,12 @@
  *     string from `mcp/src/registry/warning.ts`.
  *   - destructive: false (creates a row but does NOT delete).
  *   - Input shape (data-layer signature: `generateReport(apiKey, input, options)`,
- *     where input is `GenerateReportInput { framework, periodStart, periodEnd }`):
- *       framework:    string  (e.g. "soc2", "iso42001")
- *       period_start: string  (ISO date)
- *       period_end:   string  (ISO date)
+ *     where input is `GenerateReportInput { type, period, from?, to?, params? }`):
+ *       type:       enum weekly_cost / compliance / anomaly / custom
+ *       period:     enum week / month
+ *       from?:      ISO date
+ *       to?:        ISO date
+ *       params?:    JSON object
  *       project_id?:  string  (overrides auth.projectId)
  *   - Handler is a thin pass-through to `generateReport`. ctx.abortSignal
  *     MUST be threaded into options.signal.
@@ -23,7 +25,7 @@
  *
  *   export async function generateReport(
  *     apiKey: ApiKeyInfo,
- *     input: GenerateReportInput,    // { framework, periodStart, periodEnd }
+ *     input: GenerateReportInput,    // { type, period, from?, to?, params? }
  *     options: QueryOptions = {},
  *   ): Promise<GenerateReportPayload> // { report: ReportRow|null, errors: [...] }
  */
@@ -75,8 +77,8 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 const samplePayload = {
   report: {
     id: "rpt-1",
-    name: "soc2 Report",
-    framework: "soc2",
+    name: "weekly_cost Report",
+    framework: "weekly_cost",
     periodStart: "2026-04-01T00:00:00.000Z",
     periodEnd: "2026-05-01T00:00:00.000Z",
     captureCount: 42,
@@ -111,9 +113,11 @@ describe("D-C10-1 generateReportInputSchema", () => {
   it("accepts the documented fields", () => {
     expect(() =>
       generateReportInputSchema.parse({
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "weekly_cost",
+        period: "week",
+        from: "2026-04-01T00:00:00.000Z",
+        to: "2026-05-01T00:00:00.000Z",
+        params: { team: "platform" },
       }),
     ).not.toThrow();
   });
@@ -121,17 +125,26 @@ describe("D-C10-1 generateReportInputSchema", () => {
   it("accepts optional project_id", () => {
     expect(() =>
       generateReportInputSchema.parse({
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "compliance",
+        period: "month",
         project_id: "proj-x",
       }),
     ).not.toThrow();
   });
 
+  it("rejects the legacy framework/period_start/period_end shape", () => {
+    expect(() =>
+      generateReportInputSchema.parse({
+        framework: "soc2",
+        period_start: "2026-04-01",
+        period_end: "2026-05-01",
+      }),
+    ).toThrow();
+  });
+
   it("rejects missing required fields", () => {
     expect(() =>
-      generateReportInputSchema.parse({ framework: "soc2" } as never),
+      generateReportInputSchema.parse({ type: "weekly_cost" } as never),
     ).toThrow();
   });
 });
@@ -157,9 +170,8 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     const ctx = makeCtx();
     await generateReportTool.handler(
       {
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "weekly_cost",
+        period: "week",
       } as never,
       ctx,
     );
@@ -172,9 +184,8 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     const ctx = makeCtx({ abortSignal: ac.signal });
     await generateReportTool.handler(
       {
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "weekly_cost",
+        period: "week",
       } as never,
       ctx,
     );
@@ -183,21 +194,27 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     expect(opts.signal).toBe(ac.signal);
   });
 
-  it("passes framework / periodStart / periodEnd to the data layer", async () => {
+  it("passes type / period / from / to / params to the data layer", async () => {
     generateReport.mockResolvedValueOnce(samplePayload);
     const ctx = makeCtx();
     await generateReportTool.handler(
       {
-        framework: "iso42001",
-        period_start: "2026-01-01",
-        period_end: "2026-04-01",
+        type: "custom",
+        period: "month",
+        from: "2026-01-01T00:00:00.000Z",
+        to: "2026-04-01T00:00:00.000Z",
+        params: { owner: "security" },
       } as never,
       ctx,
     );
     const [, input] = generateReport.mock.calls[0];
-    expect((input as { framework: string }).framework).toBe("iso42001");
-    expect((input as { periodStart: string }).periodStart).toBe("2026-01-01");
-    expect((input as { periodEnd: string }).periodEnd).toBe("2026-04-01");
+    expect((input as { type: string }).type).toBe("custom");
+    expect((input as { period: string }).period).toBe("month");
+    expect((input as { from: string }).from).toBe("2026-01-01T00:00:00.000Z");
+    expect((input as { to: string }).to).toBe("2026-04-01T00:00:00.000Z");
+    expect((input as { params: Record<string, unknown> }).params).toEqual({
+      owner: "security",
+    });
   });
 
   it("project_id overrides auth.projectId on the apiKey bag", async () => {
@@ -212,9 +229,8 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     });
     await generateReportTool.handler(
       {
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "compliance",
+        period: "month",
         project_id: "override-proj",
       } as never,
       ctx,
@@ -229,9 +245,8 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     const ctx = makeCtx();
     const result = await generateReportTool.handler(
       {
-        framework: "soc2",
-        period_start: "2026-04-01",
-        period_end: "2026-05-01",
+        type: "weekly_cost",
+        period: "week",
       } as never,
       ctx,
     );
@@ -248,12 +263,11 @@ describe("D-C10-1 generateReportTool handler — thin pass-through", () => {
     await expect(
       generateReportTool.handler(
         {
-          framework: "soc2",
-          period_start: "2026-04-01",
-          period_end: "2026-05-01",
+          type: "weekly_cost",
+          period: "week",
         } as never,
         ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

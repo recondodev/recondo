@@ -1,8 +1,9 @@
 /**
  * D-C12-1, D-C12-2, D-C12-3 (unit) — `recondo-mcp config <flavor>` subcommand.
  *
- * Per the C0 audit (Decision 3, Option A), `--scoped` is DROPPED in v1.
- * `mintScopedKey` does not exist; the flag is not recognized.
+ * Hardening restores `--scoped <project_id>` as a first-class config
+ * option. The binary mints the key; this unit file checks parser and
+ * emitter behavior without touching the DB.
  *
  * The implementer must export an `emitRegistrationJson` (or equivalently
  * named) function from a config-subcommand module — these unit tests
@@ -18,11 +19,12 @@
  *   - goose flavor → `{extensions: {recondo: {type: "stdio", cmd: "recondo-mcp", env: {...}}}}`.
  *   - env populated from process.env (DATABASE_URL, RECONDO_OBJECT_STORE_PATH).
  *   - NO `RECONDO_API_KEY` in env by default.
- *   - `--scoped` is rejected at the flag layer (parseFlags throws on unknown flag).
+ *   - `--scoped` is parsed and an explicitly supplied apiKey is emitted.
  *
  * NOTE: We mock @recondo/data so the registration helper can import
- * sibling modules without a live pool. The config flow MUST NOT touch
- * the database — JSON emission is pure / process.env only.
+ * sibling modules without a live pool. JSON emission is pure /
+ * process.env only; scoped key minting happens in the binary before the
+ * emitter is called.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -39,8 +41,6 @@ import { parseFlags } from "../../src/config/flags.js";
 //
 // If the implementer picks a different filename, update only this import.
 import { emitRegistrationJson } from "../../src/config/registration.js";
-
-type Flavor = "claude-code" | "cursor" | "goose";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -77,6 +77,51 @@ describe("D-C12-1 emitRegistrationJson — claude-code flavor", () => {
     const env = parsed.mcpServers.recondo.env;
     expect(env.DATABASE_URL).toBe("postgres://app:secret@db.example/recondo");
     expect(env.RECONDO_OBJECT_STORE_PATH).toBe("/var/recondo/objects");
+  });
+
+  it("propagates dev-bypass and local object/data dir env when present", async () => {
+    process.env.RECONDO_DEV_BYPASS = "1";
+    process.env.RECONDO_DATA_DIR = "/var/recondo/data";
+    process.env.RECONDO_OBJECTS = "/var/recondo/raw-objects";
+    process.env.NODE_ENV = "development";
+
+    const json = await emitRegistrationJson({ client: "claude-code" });
+    const parsed = JSON.parse(json) as {
+      mcpServers: { recondo: { env: Record<string, string> } };
+    };
+    expect(parsed.mcpServers.recondo.env).toMatchObject({
+      RECONDO_DEV_BYPASS: "1",
+      RECONDO_DATA_DIR: "/var/recondo/data",
+      RECONDO_OBJECTS: "/var/recondo/raw-objects",
+      NODE_ENV: "development",
+    });
+  });
+
+  it("emits args when includeArgs is requested", async () => {
+    const json = await emitRegistrationJson({
+      client: "claude-code",
+      includeArgs: true,
+      flags: { allowActions: true, allowDestructive: false },
+    });
+    const parsed = JSON.parse(json) as {
+      mcpServers: { recondo: { args: string[] } };
+    };
+    expect(parsed.mcpServers.recondo.args).toEqual(["--allow-actions"]);
+  });
+
+  it("emits destructive args only after allow-actions", async () => {
+    const json = await emitRegistrationJson({
+      client: "claude-code",
+      includeArgs: true,
+      flags: { allowActions: true, allowDestructive: true },
+    });
+    const parsed = JSON.parse(json) as {
+      mcpServers: { recondo: { args: string[] } };
+    };
+    expect(parsed.mcpServers.recondo.args).toEqual([
+      "--allow-actions",
+      "--allow-destructive",
+    ]);
   });
 
   it("does NOT include RECONDO_API_KEY in env by default (operator supplies their own)", async () => {
@@ -124,6 +169,7 @@ describe("D-C12-3 emitRegistrationJson — cursor flavor", () => {
       .recondo as Record<string, unknown>;
     expect(recondo.command).toBe("recondo-mcp");
     expect(recondo).toHaveProperty("env");
+    expect(recondo).toHaveProperty("args");
   });
 
   it("does NOT include RECONDO_API_KEY for cursor either", async () => {
@@ -157,6 +203,8 @@ describe("D-C12-3 emitRegistrationJson — goose flavor", () => {
     expect(recondo.type).toBe("stdio");
     expect(recondo.cmd).toBe("recondo-mcp");
     expect(recondo).toHaveProperty("env");
+    expect(recondo).toHaveProperty("args");
+    expect(recondo).toMatchObject({ enabled: true, name: "recondo" });
   });
 
   it("does NOT include RECONDO_API_KEY for goose either", async () => {
@@ -165,33 +213,31 @@ describe("D-C12-3 emitRegistrationJson — goose flavor", () => {
   });
 });
 
-describe("D-C12-2 [DROPPED per C0 §5 #3] — `--scoped` flag is rejected", () => {
-  it("`config claude-code --scoped abc` is rejected by parseFlags as unknown flag", () => {
-    // Per C0 Decision 3 Option A: `--scoped` is removed entirely from
-    // the v1 surface. parseFlags rejects all unknown `--*` tokens, so
-    // the rejection is at the flag-parser layer — no special-case
-    // handling needed in the config dispatcher.
-    expect(() => parseFlags(["config", "claude-code", "--scoped", "abc"])).toThrow(
-      /--scoped/,
+describe("D-HARD scoped config — `--scoped` flag + emitted key", () => {
+  it("`config claude-code --scoped abc` is parsed as a scoped project id", () => {
+    const parsed = parseFlags(["config", "claude-code", "--scoped", "abc"]);
+    expect(parsed.remaining).toEqual(["config", "claude-code"]);
+    expect(parsed.scopedProjectId).toBe("abc");
+  });
+
+  it("`--scoped` requires a project id", () => {
+    expect(() => parseFlags(["config", "claude-code", "--scoped"])).toThrow(
+      /requires a project id/,
     );
   });
 
-  it("the config emitter surface does NOT accept `scopedProjectId` (TS contract)", async () => {
-    // The RegistrationOptions type must NOT have a `scopedProjectId`
-    // field. We assert at runtime that passing one through is either
-    // ignored OR throws — but it must NOT produce a `RECONDO_API_KEY`
-    // in the env. The runtime contract: no key minting.
+  it("the config emitter includes RECONDO_API_KEY only when apiKey is supplied", async () => {
     process.env.DATABASE_URL = "postgres://x";
     delete process.env.RECONDO_API_KEY;
-    // `as never` because the implementer should not have widened the
-    // type to permit this; this exists to catch a regression where
-    // someone re-adds `scopedProjectId` plumbing.
     const json = await emitRegistrationJson({
       client: "claude-code",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(({ scopedProjectId: "proj_should_not_mint" } as unknown) as object),
-    } as { client: Flavor });
-    expect(json).not.toContain("RECONDO_API_KEY");
-    expect(json).not.toContain("proj_should_not_mint");
+      apiKey: "wrt_scoped_secret",
+    });
+    const parsed = JSON.parse(json) as {
+      mcpServers: { recondo: { env: Record<string, string> } };
+    };
+    expect(parsed.mcpServers.recondo.env.RECONDO_API_KEY).toBe(
+      "wrt_scoped_secret",
+    );
   });
 });

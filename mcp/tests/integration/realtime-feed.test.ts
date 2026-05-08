@@ -64,7 +64,7 @@ describeIfReady("D-C6-2 recondo_realtime_feed schema discovery", () => {
   let mcp: SpawnedMcp;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -93,7 +93,7 @@ describeIfReady("D-C6-2 recondo_realtime_feed integration", () => {
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {
@@ -161,5 +161,63 @@ describeIfReady("D-C6-2 recondo_realtime_feed integration", () => {
     expect(Array.isArray(env.items)).toBe(true);
     expect((env.items as unknown[]).length).toBe(0);
     expect(env.is_final).toBe(true);
+  });
+
+  it("returns a usable next_offset that advances to new feed rows", async () => {
+    const sessionId = randomUUID();
+    const turns = Array.from({ length: 7 }, (_, i) => ({
+      id: randomUUID(),
+      sessionId,
+      sequenceNum: i + 1,
+      timestamp: `2026-05-07T00:00:0${i}.000Z`,
+      userRequestText: `feed cursor prompt ${i}`,
+      responseText: "ack",
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 0.01,
+      httpStatus: 200,
+      captureComplete: true,
+    }));
+
+    if (seeded) await seeded.cleanup();
+    seeded = await seedTestDb({
+      sessions: [{ id: sessionId, framework: "claude-code" }],
+      turns,
+    });
+
+    const first = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_realtime_feed",
+      arguments: { limit: 2 },
+    });
+    expect(first.isError).not.toBe(true);
+    const env1 = extractEnvelope(first);
+    expect(env1.next_offset).toBe(2);
+    expect(env1.truncated).toBe(true);
+
+    const second = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_realtime_feed",
+      arguments: { limit: 2, offset: 2 },
+    });
+    expect(second.isError).not.toBe(true);
+    const env2 = extractEnvelope(second);
+    const ids1 = new Set(
+      (env1.items as Array<{ user_turn_id: string }>).map(
+        (item) => item.user_turn_id,
+      ),
+    );
+    const ids2 = (env2.items as Array<{ user_turn_id: string }>).map(
+      (item) => item.user_turn_id,
+    );
+    expect(ids2.some((id) => ids1.has(id))).toBe(false);
+
+    const final = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_realtime_feed",
+      arguments: { limit: 2, offset: 6 },
+    });
+    expect(final.isError).not.toBe(true);
+    const env3 = extractEnvelope(final);
+    expect((env3.items as unknown[]).length).toBe(1);
+    expect(env3.next_offset).toBeNull();
+    expect(env3.truncated).toBe(false);
   });
 });

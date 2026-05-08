@@ -52,7 +52,7 @@ describeIfReady("D-C3-2 recondo_get_turn round-trip + injection defense", () => 
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
 
   beforeAll(async () => {
-    mcp = await spawnMcp({});
+    mcp = await spawnMcp({ devBypass: true });
   });
 
   afterAll(async () => {

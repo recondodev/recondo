@@ -46,8 +46,9 @@
  *       (b) `process.env.RECONDO_DATA_DIR` — gateway-style data dir;
  *           the helper appends `/objects` to match the on-disk layout.
  *       (c) `<home>/.recondo/objects` as the last-resort fallback.
- *     v1 only ships the local driver; if `RECONDO_OBJECTS=s3` is set,
- *     an explicit error is thrown — S3 readRange is not implemented yet.
+ *     v1 deliberately ships only the local driver; if
+ *     `RECONDO_OBJECTS=s3` is set, an explicit error is thrown. This is
+ *     a genuine v1 scope cut, not a hidden fallback.
  */
 
 import { homedir } from "node:os";

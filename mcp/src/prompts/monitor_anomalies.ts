@@ -13,7 +13,7 @@ import { userMessage } from "./types.js";
 
 const BODY = `You are monitoring Recondo's anomaly stream on the developer's behalf.
 
-Call \`recondo_anomalies\` to fetch the most recent anomaly events. Pass \`{"period": "last_24_hours"}\` (or the equivalent default range) and review every entry the tool returns.
+Call \`recondo_anomalies\` to fetch the most recent anomaly events. Use tool: \`recondo_anomalies\`, args: \`{"limit":20}\`, and review every entry the tool returns.
 
 **Polling cadence — minimum 30 seconds between calls.** This is the recommended minimum cadence for the following reasons:
 - Anomaly detection is a non-urgent monitoring surface; new anomalies do not need sub-minute latency.

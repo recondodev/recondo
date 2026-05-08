@@ -34,13 +34,10 @@
  *     `complianceSummary` / `complianceFrameworks` / `complianceAuditLog`
  *     MUST NOT appear in `@recondo/data` import lines.
  *
- * Phantom-tool guard (C0 §5 #1: `recondo_insights` is DROPPED):
- *   - This file co-locates the assertion that `recondo_insights` does
- *     NOT exist as a registered tool. The C9 catalog count test owns
- *     the count assertion (27 read tools); this test pins the DROP
- *     decision at the unit level so a regression that adds an
- *     `insightsTool` import to `server.ts` fails here BEFORE the
- *     binary boots.
+ * Insights registration guard:
+ *   - Hardening restores `recondo_insights` as a first-class tool. This
+ *     file keeps a lightweight source assertion that `server.ts` wires
+ *     the `insightsTool` import into the read catalog.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
@@ -180,6 +177,21 @@ describe("D-C8-3 complianceInputSchema", () => {
     ).not.toThrow();
   });
 
+  it("schema rejects limit/offset for summary and frameworks views", () => {
+    expect(() =>
+      complianceInputSchema.parse({ view: "summary", limit: 10 }),
+    ).toThrow();
+    expect(() =>
+      complianceInputSchema.parse({ view: "summary", offset: 1 }),
+    ).toThrow();
+    expect(() =>
+      complianceInputSchema.parse({ view: "frameworks", limit: 10 }),
+    ).toThrow();
+    expect(() =>
+      complianceInputSchema.parse({ view: "frameworks", offset: 1 }),
+    ).toThrow();
+  });
+
   it("schema rejects negative offset / non-positive limit", () => {
     expect(() =>
       complianceInputSchema.parse({ view: "audit_log", offset: -1 }),
@@ -297,7 +309,7 @@ describe("D-C8-3 complianceTool handler — signal threading", () => {
     const ctx = makeCtx({ abortSignal: ac.signal });
     await expect(
       complianceTool.handler({ view: "audit_log" } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -370,20 +382,10 @@ describe("D-C8-3 complianceTool handler — output shape", () => {
   });
 });
 
-describe("D-C8-3 complianceTool — phantom-tool guard (C0 §5 #1: insights DROPPED)", () => {
-  it("the production source files do NOT register a `recondo_insights` tool", () => {
-    // Walk every TS file under src/tools and src/server.ts and assert
-    // that the literal `recondo_insights` does not appear. This is a
-    // companion to the integration check (which spawns the binary and
-    // calls tools/list) — the unit assertion catches a phantom registration
-    // without spawning a process.
-    const files = [
-      resolve(__dirname, "../../src/server.ts"),
-    ];
-    for (const f of files) {
-      const text = readFileSync(f, "utf8");
-      const m = /\brecondo_insights\b/.exec(text);
-      expect(m, `forbidden \`recondo_insights\` reference in ${f}`).toBeNull();
-    }
+describe("D-HARD insights registration guard", () => {
+  it("the production server registers `recondo_insights`", () => {
+    const text = readFileSync(resolve(__dirname, "../../src/server.ts"), "utf8");
+    expect(text).toMatch(/\binsightsTool\b/);
+    expect(text).toMatch(/\brecondo_insights\b|\binsightsTool\b/);
   });
 });

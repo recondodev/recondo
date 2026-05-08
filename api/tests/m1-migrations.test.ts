@@ -961,16 +961,20 @@ describe("M1.4 -- api_keys table", () => {
       "rate_limit_rpm",
       "created_at",
       "revoked_at",
+      "name",
+      "scope",
     ];
     for (const col of expected) {
       expect(cols.has(col), `api_keys missing column: ${col}`).toBe(true);
     }
   });
 
-  it("api_keys.project_id has FK to projects(id)", async () => {
+  it("api_keys.project_id is text-scoped for gateway/MCP project ids", async () => {
+    const types = await getColumnTypes("api_keys");
+    expect(types.get("project_id")?.data_type).toBe("text");
     expect(
       await foreignKeyExists("api_keys", "project_id", "projects", "id")
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -1162,20 +1166,27 @@ describe("M1.5 -- compliance_audit_log table", () => {
 describe("M1.5 -- compliance seed data", () => {
   it("4 compliance frameworks are seeded", async () => {
     const result = await pool.query(
-      "SELECT COUNT(*)::int AS cnt FROM compliance_frameworks WHERE id LIKE 'seed-fw-%'"
+      "SELECT COUNT(*)::int AS cnt FROM compliance_frameworks WHERE id IN ('soc2','iso42001','euai','nist')"
     );
     expect(result.rows[0].cnt).toBe(4);
   });
 
   it("seeded frameworks are SOC 2, ISO 42001, EU AI Act, NIST AI RMF", async () => {
     const result = await pool.query(
-      "SELECT id FROM compliance_frameworks WHERE id LIKE 'seed-fw-%' ORDER BY id"
+      "SELECT id FROM compliance_frameworks WHERE id IN ('soc2','iso42001','euai','nist') ORDER BY id"
     );
     const ids = result.rows.map((r) => r.id);
-    expect(ids).toContain("seed-fw-soc2");
-    expect(ids).toContain("seed-fw-iso42001");
-    expect(ids).toContain("seed-fw-euai");
-    expect(ids).toContain("seed-fw-nist");
+    expect(ids).toContain("soc2");
+    expect(ids).toContain("iso42001");
+    expect(ids).toContain("euai");
+    expect(ids).toContain("nist");
+  });
+
+  it("does not leave duplicate seed-fw framework aliases behind", async () => {
+    const result = await pool.query(
+      "SELECT COUNT(*)::int AS cnt FROM compliance_frameworks WHERE id LIKE 'seed-fw-%'"
+    );
+    expect(result.rows[0].cnt).toBe(0);
   });
 
   it("each framework has 7 controls seeded", async () => {
@@ -1183,7 +1194,7 @@ describe("M1.5 -- compliance seed data", () => {
       `SELECT cf.name, COUNT(cc.id)::int AS cnt
        FROM compliance_frameworks cf
        JOIN compliance_controls cc ON cc.framework_id = cf.id
-       WHERE cf.id LIKE 'seed-fw-%'
+       WHERE cf.id IN ('soc2','iso42001','euai','nist')
        GROUP BY cf.name
        ORDER BY cf.name`
     );

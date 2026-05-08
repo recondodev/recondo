@@ -15,6 +15,7 @@
 
 export const typeDefs = /* GraphQL */ `
 scalar DateTime
+scalar JSON
 
 type Query {
   sessions(filter: SessionFilter, limit: Int, offset: Int): SessionConnection!
@@ -593,11 +594,27 @@ type TrendPoint {
   value: Float!
 }
 
+"""D6.1: Persisted report generator type."""
+enum GenerateReportType {
+  WEEKLY_COST
+  COMPLIANCE
+  ANOMALY
+  CUSTOM
+}
+
+"""D6.1: Persisted report generator period."""
+enum GenerateReportPeriod {
+  WEEK
+  MONTH
+}
+
 """D6.1: Input for generating a report."""
 input GenerateReportInput {
-  framework: String!
-  periodStart: DateTime!
-  periodEnd: DateTime!
+  type: GenerateReportType!
+  period: GenerateReportPeriod!
+  from: DateTime
+  to: DateTime
+  params: JSON
 }
 
 """D6.1: Payload returned from generateReport mutation."""

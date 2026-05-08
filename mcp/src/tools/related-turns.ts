@@ -15,8 +15,9 @@
  *                          `retry_of_turn_id` column was never shipped).
  *
  * Legacy v0 relations DROPPED — their backing columns do not exist on
- * `turns`, so they cannot be honestly implemented. The Zod enum has
- * EXACTLY 3 members.
+ * `turns`, so they cannot be honestly implemented. This is the design
+ * rationale for reducing the draft five-member enum to the three-member
+ * v1 enum exposed here.
  *
  * Captured user text on each row is wrapped via
  * `buildMessageEnvelope("user", session_id, turn_id, text)` so
@@ -31,10 +32,12 @@ import { relatedTurns } from "@recondo/data";
 import type { Relation, RelatedTurnsRow } from "@recondo/data";
 import { z } from "zod";
 
-import { buildListEnvelope } from "../envelope/list.js";
 import { buildMessageEnvelope } from "../envelope/messages.js";
-import { enforceListBudget } from "../envelope/truncate.js";
 import type { ReadTool } from "../registry/types.js";
+import {
+  buildBudgetedOffsetEnvelope,
+  collectOffsetPage,
+} from "./pagination.js";
 
 const inputShape = {
   turn_id: z.string().min(1),
@@ -97,25 +100,17 @@ export const relatedTurnsTool: ReadTool<RelatedTurnsInput, unknown> = {
     const offset = input.offset ?? 0;
     const limit = input.limit ?? 20;
 
-    const items: RelatedTurnItem[] = [];
     const iterable = relatedTurns(
       input.turn_id,
       input.relation as Relation,
-      { limit, signal: ctx.abortSignal },
+      { limit: offset + limit + 1, signal: ctx.abortSignal },
     );
-    for await (const row of iterable) {
-      if (ctx.abortSignal?.aborted) {
-        throw new DOMException("aborted", "AbortError");
-      }
-      items.push(projectRow(row));
-      if (items.length >= limit) break;
-    }
-
-    const budget = enforceListBudget(items, offset, JSON.stringify);
-    return buildListEnvelope({
-      items: budget.items,
-      nextOffset: budget.nextOffset,
-      truncated: budget.truncated,
+    const page = await collectOffsetPage(iterable, {
+      offset,
+      limit,
+      signal: ctx.abortSignal,
+      project: projectRow,
     });
+    return buildBudgetedOffsetEnvelope(page, offset, JSON.stringify);
   },
 };

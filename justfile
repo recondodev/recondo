@@ -524,6 +524,18 @@ ci-typescript: ws-install data-lint-arch check-versions data-build data-test dat
     pnpm --filter recondo-mcp build
     pnpm --filter recondo-mcp test
 
+# Full TypeScript CI with local infra and a hard gate against skipped
+# integration coverage.
+ci-typescript-with-infra: dev-setup ws-install data-lint-arch check-versions data-build data-test data-test-types
+    cd api && DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo_test" pnpm test
+    pnpm --filter recondo-mcp build
+    @bash -o pipefail -c 'LOG=$(mktemp); \
+      DATABASE_URL="postgres://recondo:recondo_dev@localhost:5432/recondo" pnpm --filter recondo-mcp test 2>&1 | tee "$LOG"; \
+      if grep -q '\''"skipped":true'\'' "$LOG"; then \
+        echo "mcp integration tests emitted skip warnings"; \
+        exit 1; \
+      fi'
+
 # ---------- MCP Server (recondo-mcp) ----------
 
 # MCP test runner (unit + integration; integration requires `just dev-infra` + `just api-migrate`)

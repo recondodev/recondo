@@ -254,7 +254,7 @@ describe("D-C5-1 compareTurnsTool handler — signature + signal threading", () 
 
     await expect(
       compareTurnsTool.handler({ turn_ids: ["t-1", "t-2"] } as never, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -321,6 +321,36 @@ describe("D-C5-1 compareTurnsTool handler — output shape", () => {
     expect(openMatches.length).toBeGreaterThanOrEqual(2);
     expect(wholeJson).toContain("first user prompt");
     expect(wholeJson).toContain("second user prompt");
+  });
+
+  it("uses data-layer sessionIds for captured prompt envelope provenance", async () => {
+    compareTurns.mockResolvedValueOnce({
+      turn_ids: ["t-1", "t-2"],
+      rows: [
+        {
+          aspect: "prompt",
+          values: {
+            "t-1": "first user prompt",
+            "t-2": "second user prompt",
+          },
+          sessionIds: {
+            "t-1": "session-1",
+            "t-2": "session-2",
+          },
+          delta: null,
+        },
+      ],
+    });
+    const ctx = makeCtx();
+
+    const result = (await compareTurnsTool.handler(
+      { turn_ids: ["t-1", "t-2"], aspects: ["prompt"] } as never,
+      ctx,
+    )) as Record<string, unknown>;
+
+    const wholeJson = JSON.stringify(result);
+    expect(wholeJson).toContain('"from_session_id":"session-1"');
+    expect(wholeJson).toContain('"from_session_id":"session-2"');
   });
 
   it("wraps captured response text in <captured_assistant_message> per turn", async () => {

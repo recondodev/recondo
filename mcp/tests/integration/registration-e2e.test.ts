@@ -117,7 +117,7 @@ describeIfReady("D-C13-10 claude-code registration round-trip", () => {
       RECONDO_DEV_BYPASS: "1",
       NODE_ENV: "development",
     };
-    const mcp = await spawnMcp({ env: launchEnv });
+    const mcp = await spawnMcp({ devBypass: true, env: launchEnv });
     try {
       // Step 4: tools/list must succeed and return the read catalog.
       const list = await mcp.request<{ tools: ToolDefinition[] }>("tools/list");

@@ -19,6 +19,7 @@
  *     options: {
  *       group_by: ToolCallGroupBy;
  *       period: ToolCallPeriod;
+ *       projectId?: string;
  *       signal?: AbortSignal;
  *     },
  *   ): AsyncIterable<ToolCallStatsRow>;
@@ -562,6 +563,25 @@ describe("toolCallStats — D-TS6 group_by framework", () => {
 
     expect(cc!.total_calls).toBe(2);
     expect(cx!.total_calls).toBe(1);
+  });
+});
+
+describe("toolCallStats — project scoping", () => {
+  it("adds a project_id predicate when projectId is supplied", async () => {
+    const pool = getPool();
+    const spy = vi.spyOn(pool, "query");
+    for await (const _row of toolCallStats({
+      group_by: "tool_name",
+      period: "all",
+      projectId: "project-a",
+    } as never)) {
+      break;
+    }
+    const sqlStrings = spy.mock.calls.map((c) => String(c[0])).join("\n");
+    const params = spy.mock.calls.flatMap((c) => c[1] as unknown[]);
+    expect(sqlStrings).toMatch(/s\.project_id\s*=\s*\$/);
+    expect(params).toContain("project-a");
+    spy.mockRestore();
   });
 });
 

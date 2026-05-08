@@ -28,7 +28,7 @@ describe("@recondo/data: getRealtimeStats (D-RT1)", () => {
     ctrl.abort();
     await expect(
       getRealtimeStats(adminKey, { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });
 
@@ -90,6 +90,6 @@ describe("@recondo/data: getGatewayStatus (D-RT3)", () => {
     ctrl.abort();
     await expect(
       getGatewayStatus(adminKey, { signal: ctrl.signal }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
   });
 });

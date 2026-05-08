@@ -34,7 +34,93 @@ describe("@recondo/data: listAnomalies envelope (D-AN1)", () => {
   it("honors AbortSignal", async () => {
     const ctrl = new AbortController();
     ctrl.abort();
-    await expect(listAnomalies(adminKey, {}, { signal: ctrl.signal })).rejects.toThrow();
+    await expect(listAnomalies(adminKey, {}, { signal: ctrl.signal })).rejects.toThrow(/aborted|AbortError|invalid|required|missing|not found|failed|failure|boom|db down|auth|API key|database|validation|unsupported|period|relation|signal/i);
+  });
+
+  it("uses a sentinel row so a full terminal page does not claim next_offset", async () => {
+    const pool = getPool();
+    const spy = vi.spyOn(pool, "query").mockResolvedValueOnce({
+      rows: [
+        {
+          id: "a-1",
+          session_id: "s-1",
+          turn_id: "t-1",
+          anomaly_type: "rate_limit",
+          severity: "high",
+          description: "one",
+          detected_at: "2026-05-01T00:00:00.000Z",
+          metadata: null,
+        },
+        {
+          id: "a-2",
+          session_id: "s-1",
+          turn_id: "t-2",
+          anomaly_type: "rate_limit",
+          severity: "high",
+          description: "two",
+          detected_at: "2026-05-01T00:00:01.000Z",
+          metadata: null,
+        },
+      ],
+    } as never);
+
+    const env = await listAnomalies(adminKey, {}, { limit: 2, offset: 0 });
+
+    expect(env.items).toHaveLength(2);
+    expect(env.truncated).toBe(false);
+    expect(env.next_offset).toBeNull();
+    const params = spy.mock.calls[0][1] as unknown[];
+    expect(params).toContain(3);
+    spy.mockRestore();
+  });
+
+  it("sets next_offset only when the sentinel row is present", async () => {
+    const pool = getPool();
+    const spy = vi.spyOn(pool, "query").mockResolvedValueOnce({
+      rows: [
+        {
+          id: "a-1",
+          session_id: "s-1",
+          turn_id: "t-1",
+          anomaly_type: "rate_limit",
+          severity: "high",
+          description: "one",
+          detected_at: "2026-05-01T00:00:00.000Z",
+          metadata: null,
+        },
+        {
+          id: "a-2",
+          session_id: "s-1",
+          turn_id: "t-2",
+          anomaly_type: "rate_limit",
+          severity: "high",
+          description: "two",
+          detected_at: "2026-05-01T00:00:01.000Z",
+          metadata: null,
+        },
+        {
+          id: "a-3",
+          session_id: "s-1",
+          turn_id: "t-3",
+          anomaly_type: "rate_limit",
+          severity: "high",
+          description: "three",
+          detected_at: "2026-05-01T00:00:02.000Z",
+          metadata: null,
+        },
+      ],
+    } as never);
+
+    const env = await listAnomalies(adminKey, {}, { limit: 2, offset: 5 });
+
+    expect(env.items).toHaveLength(2);
+    expect(env.truncated).toBe(true);
+    expect(env.next_offset).toBe(7);
+    expect(env.items.map((item) => item.id)).toEqual(["a-1", "a-2"]);
+    const params = spy.mock.calls[0][1] as unknown[];
+    expect(params).toContain(3);
+    expect(params).toContain(5);
+    spy.mockRestore();
   });
 });
 
