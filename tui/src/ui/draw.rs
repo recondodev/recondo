@@ -2,7 +2,6 @@ use crate::app::keymap::Mode;
 use crate::app::lens::Lens;
 use crate::app::state::AppState;
 use crate::lenses::help::HelpOverlay;
-use crate::lenses::stub::StubLens;
 use crate::ui::theme;
 use ratatui::{
     layout::Rect,
@@ -10,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-/// Top-level draw dispatcher. Picks the lens (or stub/help overlay) for the
+/// Top-level draw dispatcher. Picks the active lens or help overlay for the
 /// current `AppState::lens()` and renders it into the frame, then layers any
 /// modal overlay on top (palette / search prompt).
 ///
@@ -49,8 +48,7 @@ pub fn draw_app(f: &mut Frame<'_>, state: &AppState) {
         }
         Lens::Cost => state.cost().draw(f, area),
         Lens::Agents => state.agents().draw(f, area),
-        Lens::AuditStub => StubLens::audit().draw(f, area),
-        Lens::ReplayStub => StubLens::replay().draw(f, area),
+        Lens::Audit => state.audit().draw(f, area),
         Lens::Help => HelpOverlay.draw(f, area),
     }
     // Overlays.

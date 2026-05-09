@@ -38,14 +38,10 @@ fn apply_realtime_feed_update_populates_snapshot_rows() {
 }
 
 #[test]
-fn apply_gateway_status_update_sets_healthy_and_port() {
+fn apply_gateway_status_update_sets_healthy() {
     let mut s = AppState::new();
-    s.apply_update(LensUpdate::GatewayStatus {
-        healthy: true,
-        port: 8443,
-    });
+    s.apply_update(LensUpdate::GatewayStatus { healthy: true });
     assert!(s.realtime().snapshot().healthy);
-    assert_eq!(s.realtime().snapshot().port, 8443);
 }
 
 #[test]
@@ -82,17 +78,13 @@ fn realtime_stats_does_not_clobber_feed_rows() {
 fn gateway_status_does_not_clobber_feed_rows() {
     let mut s = AppState::new();
     s.apply_update(LensUpdate::RealtimeFeed(fake_feed_rows()));
-    s.apply_update(LensUpdate::GatewayStatus {
-        healthy: true,
-        port: 8443,
-    });
+    s.apply_update(LensUpdate::GatewayStatus { healthy: true });
     assert_eq!(
         s.realtime().snapshot().rows.len(),
         2,
         "feed rows must NOT be wiped by gateway-status update"
     );
     assert!(s.realtime().snapshot().healthy);
-    assert_eq!(s.realtime().snapshot().port, 8443);
 }
 
 #[test]
@@ -133,10 +125,9 @@ async fn poll_gateway_status_once_marshals_into_update() {
     let resp = build_fake_gateway_status_response();
     let update = poll_gateway_status_once(|_| async { Ok(resp) }).await;
     match update.expect("Ok") {
-        LensUpdate::GatewayStatus { healthy, port } => {
+        LensUpdate::GatewayStatus { healthy } => {
             // status field varies by environment; just verify it parsed successfully.
             let _ = healthy;
-            assert!(port > 0);
         }
         _ => panic!("expected GatewayStatus variant"),
     }

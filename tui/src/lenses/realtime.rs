@@ -36,7 +36,6 @@ pub struct FeedRow {
 #[derive(Debug, Clone)]
 pub struct RealtimeSnapshot {
     pub healthy: bool,
-    pub port: i32,
     pub active_providers: i32,
     pub active_sessions: i32,
     pub user_turns_per_min: i64,
@@ -72,7 +71,6 @@ impl RealtimeLens {
     pub fn new() -> Self {
         Self::with_snapshot(RealtimeSnapshot {
             healthy: false,
-            port: 8443,
             active_providers: 0,
             active_sessions: 0,
             user_turns_per_min: 0,
@@ -127,7 +125,7 @@ impl RealtimeLens {
     }
 
     /// Partial update: replace just the stats portion of the snapshot. Leaves
-    /// `rows`, `healthy`, `port` untouched so the realtime stats polling task
+    /// `rows` and `healthy` untouched so the realtime stats polling task
     /// does not clobber data owned by the feed or gateway-status tasks.
     #[allow(clippy::too_many_arguments)]
     pub fn apply_stats(
@@ -162,12 +160,11 @@ impl RealtimeLens {
         }
     }
 
-    /// Partial update: replace just gateway health + port. Independent of
-    /// stats and feed so the 15s status cadence can run without disturbing
-    /// the 5s stats / feed cadences.
-    pub fn apply_gateway_status(&mut self, healthy: bool, port: i32) {
+    /// Partial update: replace just gateway health. Independent of stats and
+    /// feed so the 15s status cadence can run without disturbing the 5s stats
+    /// / feed cadences.
+    pub fn apply_gateway_status(&mut self, healthy: bool) {
         self.snapshot.healthy = healthy;
-        self.snapshot.port = port;
     }
 
     pub fn provider_filter(&self) -> Option<&str> {
@@ -264,7 +261,6 @@ impl RealtimeLens {
         f.render_widget(
             StatusPill {
                 healthy: self.snapshot.healthy,
-                port: self.snapshot.port,
             },
             chunks[0],
         );

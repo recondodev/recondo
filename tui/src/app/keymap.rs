@@ -14,8 +14,7 @@ pub enum KeyAction {
     OpenSessions,
     OpenCost,
     OpenAgents,
-    OpenAuditStub,
-    OpenReplayStub,
+    OpenAudit,
     OpenPalette,
     OpenSearch,
     OpenHelp,
@@ -62,9 +61,8 @@ pub fn dispatch_key(ev: KeyEvent, mode: Mode) -> KeyAction {
         (Mode::Normal, KeyCode::Char('c'), _) => KeyAction::OpenCost,
         (Mode::Normal, KeyCode::Char('a'), _) => KeyAction::OpenAgents,
         (Mode::Normal, KeyCode::Char('A'), m) if m.contains(KeyModifiers::SHIFT) => {
-            KeyAction::OpenAuditStub
+            KeyAction::OpenAudit
         }
-        (Mode::Normal, KeyCode::Char('r'), _) => KeyAction::OpenReplayStub,
         (Mode::Normal, KeyCode::Char('H'), m) if m.contains(KeyModifiers::SHIFT) => {
             KeyAction::HistoryBack
         }

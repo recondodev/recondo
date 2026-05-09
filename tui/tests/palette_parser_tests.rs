@@ -31,6 +31,14 @@ fn since_and_between_are_unimplemented_in_v1() {
 }
 
 #[test]
+fn replay_is_not_a_palette_command_until_it_has_a_live_data_path() {
+    assert!(
+        parse_command("replay").is_err(),
+        "replay must not be reachable until it has a live TUI data path"
+    );
+}
+
+#[test]
 fn parses_pin_and_quit() {
     assert_eq!(parse_command("pin"), Ok(Command::Pin));
     assert_eq!(parse_command("q"), Ok(Command::Quit));

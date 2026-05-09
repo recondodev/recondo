@@ -1,6 +1,7 @@
 //! Update messages from polling tasks to the main loop.
 
 use crate::lenses::agents::{AgentSummaryStats, FrameworkSlice, TopRow};
+use crate::lenses::audit::AuditRow;
 use crate::lenses::cost::BreakdownRow;
 use crate::lenses::realtime::FeedRow;
 use crate::lenses::session_detail::SessionDetailLens;
@@ -23,6 +24,10 @@ pub enum LensUpdate {
     AgentsFrameworkDist(Vec<FrameworkSlice>),
     AgentsTopDevs(Vec<TopRow>),
     AgentsTopRepos(Vec<TopRow>),
+    AuditTrail {
+        rows: Vec<AuditRow>,
+        total: i32,
+    },
     /// Realtime stats partial-update. The three realtime updates are split
     /// (stats / feed / status) so each polling task only writes the slice of
     /// the snapshot it owns — a feed refresh never clobbers cards, and a
@@ -40,6 +45,5 @@ pub enum LensUpdate {
     RealtimeFeed(Vec<FeedRow>),
     GatewayStatus {
         healthy: bool,
-        port: i32,
     },
 }

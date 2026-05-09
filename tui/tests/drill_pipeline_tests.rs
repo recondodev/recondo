@@ -14,6 +14,8 @@ fn three_sessions() -> Vec<SessionRow> {
     vec![
         SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "claude-code".into(),
@@ -22,6 +24,8 @@ fn three_sessions() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_b".into(),
+            provider: "openai".into(),
+            project: Some("proj-b".into()),
             started_at: "11:30".into(),
             model: "gpt-4o".into(),
             framework: "cursor".into(),
@@ -259,6 +263,76 @@ fn drilling_from_realtime_feed_sets_session_and_turn_selection() {
     assert_eq!(s.session_detail_fetch_id(), Some("ses_b".into()));
     // selection.turn is staged so the SessionDetail apply path can deep-link.
     assert_eq!(s.selection().turn(), Some("ses_b:0"));
+}
+
+#[test]
+fn drilling_to_another_session_clears_stale_session_detail_until_fetch() {
+    let mut s = AppState::new();
+    s.handle(KeyAction::OpenSessions);
+    s.apply_update(LensUpdate::Sessions(three_sessions()));
+    s.handle(KeyAction::Drill);
+    s.apply_update(LensUpdate::SessionDetail(fake_session_detail_lens()));
+    assert_eq!(s.session_detail().unwrap().session_id(), "ses_a");
+
+    s.handle(KeyAction::Pop);
+    s.handle(KeyAction::MoveDown);
+    s.handle(KeyAction::Drill);
+
+    assert_eq!(s.lens(), Lens::SessionDetail);
+    assert_eq!(s.session_detail_fetch_id(), Some("ses_b".into()));
+    assert!(
+        s.session_detail().is_none(),
+        "new session drill must show loading instead of stale prior detail"
+    );
+}
+
+#[test]
+fn drilling_to_another_turn_clears_stale_turn_detail_until_fetch() {
+    let mut s = AppState::new();
+    s.handle(KeyAction::OpenSessions);
+    s.apply_update(LensUpdate::Sessions(three_sessions()));
+    s.handle(KeyAction::Drill);
+    s.apply_update(LensUpdate::SessionDetail(fake_session_detail_lens()));
+    s.handle(KeyAction::Drill);
+    s.apply_update(LensUpdate::TurnDetail(fake_turn_detail_lens()));
+    assert_eq!(s.turn_detail().unwrap().id, "trn_1");
+
+    s.handle(KeyAction::Pop);
+    s.handle(KeyAction::MoveDown);
+    s.handle(KeyAction::Drill);
+
+    assert_eq!(s.lens(), Lens::TurnDetail);
+    assert_eq!(s.turn_detail_fetch_id(), Some("trn_2".into()));
+    assert!(
+        s.turn_detail().is_none(),
+        "new turn drill must show loading instead of stale prior detail"
+    );
+}
+
+#[test]
+fn realtime_drill_clears_stale_detail_lenses_until_fetch() {
+    use recondo_tui::lenses::realtime::FeedRow;
+    let mut s = AppState::new();
+    s.set_session_detail(Some(fake_session_detail_lens()));
+    s.set_turn_detail(Some(fake_turn_detail_lens()));
+    s.realtime_mut().set_rows(vec![FeedRow {
+        time: "12:00".into(),
+        provider: "anthropic".into(),
+        model: "claude-3-5-sonnet".into(),
+        agent: "claude-code".into(),
+        tokens: 100,
+        cost: 0.10,
+        status: 200,
+        session_id: "ses_b".into(),
+        user_turn_id: "ses_b:0".into(),
+    }]);
+
+    s.handle(KeyAction::Drill);
+
+    assert_eq!(s.lens(), Lens::SessionDetail);
+    assert_eq!(s.session_detail_fetch_id(), Some("ses_b".into()));
+    assert!(s.session_detail().is_none());
+    assert!(s.turn_detail().is_none());
 }
 
 #[test]

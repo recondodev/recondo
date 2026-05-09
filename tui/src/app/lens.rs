@@ -6,7 +6,6 @@ pub enum Lens {
     TurnDetail,
     Cost,
     Agents,
-    AuditStub,
-    ReplayStub,
+    Audit,
     Help,
 }

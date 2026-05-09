@@ -20,6 +20,8 @@ const SESSION_WIDTHS: [Constraint; 6] = [
 #[derive(Debug, Clone)]
 pub struct SessionRow {
     pub id: String,
+    pub provider: String,
+    pub project: Option<String>,
     pub started_at: String,
     pub model: String,
     pub framework: String,
@@ -183,18 +185,15 @@ impl SessionsLens {
     }
 
     pub fn rows_sorted(&self) -> Vec<&SessionRow> {
-        // NOTE: Only `framework` and `model` filters are enforced here.
-        // `SessionFilter::provider` and `SessionFilter::project` are stored on
-        // the filter struct (and surfaced in the filter modal) but currently
-        // have no corresponding fields on `SessionRow`, which mirrors the
-        // GraphQL `Session` shape. Task 14+/Task 22 will either extend
-        // `SessionRow` once GraphQL exposes `Session.provider` /
-        // `Session.project`, or drop these dimensions from `SessionFilter`.
-        // The filter modal annotates these as "(not yet enforced)" so users
-        // see the limitation rather than a silent no-op.
         let mut v: Vec<&SessionRow> = self
             .rows
             .iter()
+            .filter(|r| {
+                self.filter
+                    .provider
+                    .as_deref()
+                    .is_none_or(|p| r.provider == p)
+            })
             .filter(|r| {
                 self.filter
                     .framework
@@ -202,6 +201,12 @@ impl SessionsLens {
                     .is_none_or(|f| r.framework == f)
             })
             .filter(|r| self.filter.model.as_deref().is_none_or(|m| r.model == m))
+            .filter(|r| {
+                self.filter
+                    .project
+                    .as_deref()
+                    .is_none_or(|p| r.project.as_deref() == Some(p))
+            })
             .filter(|r| match self.search_filter.as_deref() {
                 None => true,
                 Some(needle) => {
@@ -267,7 +272,7 @@ impl SessionsLens {
                     title: "Filter",
                     body: vec![
                         format!(
-                            "Provider:  {} (not yet enforced)",
+                            "Provider:  {}",
                             self.filter.provider.as_deref().unwrap_or("any")
                         ),
                         format!(
@@ -279,7 +284,7 @@ impl SessionsLens {
                             self.filter.framework.as_deref().unwrap_or("any")
                         ),
                         format!(
-                            "Project:   {} (not yet enforced)",
+                            "Project:   {}",
                             self.filter.project.as_deref().unwrap_or("any")
                         ),
                         "[Esc] close   [Enter] apply".into(),

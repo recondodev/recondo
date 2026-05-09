@@ -10,6 +10,8 @@ fn mixed_sessions() -> Vec<SessionRow> {
     vec![
         SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "claude-code".into(),
@@ -18,6 +20,8 @@ fn mixed_sessions() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_b".into(),
+            provider: "openai".into(),
+            project: Some("proj-b".into()),
             started_at: "11:30".into(),
             model: "gpt-4o".into(),
             framework: "cursor".into(),
@@ -26,6 +30,8 @@ fn mixed_sessions() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_c".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "10:00".into(),
             model: "claude-3-haiku".into(),
             framework: "codex".into(),
@@ -247,6 +253,8 @@ fn submit_in_search_applies_filter_to_session_detail_lens() {
     s.apply_update(LensUpdate::Sessions(vec![
         recondo_tui::lenses::sessions::SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "x".into(),
             framework: "x".into(),
@@ -350,6 +358,8 @@ fn polled_session_detail_refresh_preserves_search_filter() {
     s.apply_update(LensUpdate::Sessions(vec![
         recondo_tui::lenses::sessions::SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "x".into(),
             framework: "x".into(),

@@ -55,6 +55,14 @@ pub struct Turn;
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/schema.graphql",
+    query_path = "graphql/audit_trail.graphql",
+    response_derives = "Debug, Clone"
+)]
+pub struct AuditTrail;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/schema.graphql",
     query_path = "graphql/spend_by_provider.graphql",
     response_derives = "Debug, Clone"
 )]

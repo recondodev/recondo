@@ -10,8 +10,7 @@ d   Realtime Monitor
 s   Sessions
 c   Cost & Usage
 a   Agent Analytics
-A   Audit (v1.5 stub)
-r   Replay/Diff (v1.5 stub)
+A   Audit Trail
 :   Command palette
 /   Fuzzy search
 ?   This help

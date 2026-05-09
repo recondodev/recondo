@@ -10,8 +10,8 @@ fn fake_summary() -> AgentSummaryStats {
     AgentSummaryStats {
         total_agents: 12,
         total_sessions: 47,
-        total_cost: 14.20,
-        active_frameworks: 4,
+        average_turns_per_session: 8.5,
+        unique_developers: 5,
     }
 }
 fn fake_framework_dist() -> Vec<FrameworkSlice> {
@@ -50,6 +50,8 @@ fn apply_agents_summary_update_populates() {
     s.apply_update(LensUpdate::AgentsSummary(fake_summary()));
     assert_eq!(s.agents().summary().total_sessions, 47);
     assert_eq!(s.agents().summary().total_agents, 12);
+    assert_eq!(s.agents().summary().average_turns_per_session, 8.5);
+    assert_eq!(s.agents().summary().unique_developers, 5);
 }
 
 #[test]
@@ -101,6 +103,15 @@ fn agents_render_after_polling_shows_data() {
         .map(|c| c.symbol())
         .collect();
     assert!(dump.contains("47"), "session count missing: {dump}");
+    assert!(dump.contains("8.5"), "average turns metric missing: {dump}");
+    assert!(
+        dump.contains("5"),
+        "unique developers metric missing: {dump}"
+    );
+    assert!(
+        !dump.contains("$0.00"),
+        "agents cards must not render a phantom aggregate cost: {dump}"
+    );
     assert!(dump.contains("claude-code"));
     assert!(dump.contains("andmer"));
     assert!(dump.contains("recondo"));

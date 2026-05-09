@@ -74,20 +74,8 @@ fn status_pill_renders_badge_backgrounds_for_live_and_offline() {
     let backend = TestBackend::new(32, 3);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        f.render_widget(
-            StatusPill {
-                healthy: true,
-                port: 8443,
-            },
-            Rect::new(0, 0, 16, 1),
-        );
-        f.render_widget(
-            StatusPill {
-                healthy: false,
-                port: 9443,
-            },
-            Rect::new(0, 1, 18, 1),
-        );
+        f.render_widget(StatusPill { healthy: true }, Rect::new(0, 0, 16, 1));
+        f.render_widget(StatusPill { healthy: false }, Rect::new(0, 1, 18, 1));
     })
     .unwrap();
 

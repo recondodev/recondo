@@ -5,6 +5,7 @@ query Sessions($filter: SessionFilter, $limit: Int, $offset: Int) {
     offset
     items {
       id
+      projectId
       startedAt
       endedAt
       model

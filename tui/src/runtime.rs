@@ -8,21 +8,21 @@ use ratatui::Terminal;
 use recondo_tui::app::keymap::{dispatch_key, KeyAction};
 use recondo_tui::app::lens_update::LensUpdate;
 use recondo_tui::app::state::{
-    AgentsQueryVars, AppState, CostBreakdownQueryVars, CostDailyQueryVars, CostTotalQueryVars,
-    SessionsQueryVars,
+    AgentsQueryVars, AppState, AuditQueryVars, CostBreakdownQueryVars, CostDailyQueryVars,
+    CostTotalQueryVars, SessionsQueryVars,
 };
 use recondo_tui::config::Config;
 use recondo_tui::error::Result;
 use recondo_tui::gql::marshal::build_sessions_variables;
 use recondo_tui::gql::queries::{
     agent_framework_distribution as q_agent_framework_distribution,
-    agent_summary as q_agent_summary, daily_spend as q_daily_spend,
+    agent_summary as q_agent_summary, audit_trail as q_audit_trail, daily_spend as q_daily_spend,
     gateway_status as q_gateway_status, realtime_feed as q_realtime_feed,
     realtime_stats as q_realtime_stats, session_detail as q_session_detail, sessions as q_sessions,
     spend_by_framework as q_spend_by_framework, spend_by_model as q_spend_by_model,
     spend_by_provider as q_spend_by_provider, top_developers as q_top_developers,
     top_repositories as q_top_repositories, turn as q_turn, usage_summary as q_usage_summary,
-    AgentFrameworkDistribution, AgentSummary, DailySpend, GatewayStatus, RealtimeFeed,
+    AgentFrameworkDistribution, AgentSummary, AuditTrail, DailySpend, GatewayStatus, RealtimeFeed,
     RealtimeStats, SessionDetail, Sessions, SpendByFramework, SpendByModel, SpendByProvider,
     TopDevelopers, TopRepositories, Turn, UsageSummary,
 };
@@ -31,6 +31,7 @@ use recondo_tui::poll::agents::{
     poll_agent_framework_distribution_once, poll_agent_summary_once, poll_top_developers_once,
     poll_top_repositories_once,
 };
+use recondo_tui::poll::audit::poll_audit_trail_once;
 use recondo_tui::poll::cost::{
     poll_cost_breakdown_framework_once, poll_cost_breakdown_model_once, poll_cost_breakdown_once,
     poll_cost_daily_once, poll_cost_total_once,
@@ -246,6 +247,42 @@ pub async fn run(cfg: Config) -> Result<()> {
                 }
             })
         };
+
+    // Audit Trail polling. Mirrors the dashboard AuditTrail query flow:
+    // period + optional search/type filters feed one paginated auditTrail
+    // query, and the resulting table is replaced on each successful poll.
+    let (audit_vars_tx, mut audit_vars_rx) =
+        watch::channel::<Option<AuditQueryVars>>(state.audit_query_vars());
+    let _audit_task = {
+        let url = url.clone();
+        let api_key = api_key.clone();
+        let update_tx = update_tx.clone();
+        tokio::spawn(async move {
+            let mut tk = tokio::time::interval(Duration::from_secs(15));
+            loop {
+                tokio::select! {
+                    _ = tk.tick() => {}
+                    res = audit_vars_rx.changed() => {
+                        if res.is_err() { break; }
+                    }
+                }
+                let Some(vars) = audit_vars_rx.borrow().clone() else {
+                    continue;
+                };
+                let url = url.clone();
+                let api_key = api_key.clone();
+                let result = poll_audit_trail_once(vars, |v| async move {
+                    fetch_audit_trail(&url, &api_key, v).await
+                })
+                .await;
+                if let Some(update) = result {
+                    if update_tx.send(update).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
 
     // Cost-breakdown polling. Watch channel carries Option<vars>: None means
     // the user is not on the Cost lens, so the task skips the tick. The runtime
@@ -526,6 +563,7 @@ pub async fn run(cfg: Config) -> Result<()> {
                 // drill happens.
                 let _ = sd_id_tx.send(state.session_detail_fetch_id());
                 let _ = td_id_tx.send(state.turn_detail_fetch_id());
+                let _ = audit_vars_tx.send(state.audit_query_vars());
                 // Cost vars are Option<...> — None when the active lens is
                 // not Cost, which the polling tasks treat as "skip tick".
                 let _ = cost_breakdown_vars_tx.send(state.cost_breakdown_query_vars());
@@ -617,6 +655,44 @@ async fn fetch_turn(
     let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
     let q_vars = q_turn::Variables { id };
     client.query::<Turn>(q_vars).await
+}
+
+fn period_for_audit_trail(w: recondo_tui::app::time_window::TimeWindow) -> q_audit_trail::Period {
+    use recondo_tui::app::time_window::TimeWindow;
+    match w {
+        TimeWindow::Today => q_audit_trail::Period::DAY_1,
+        TimeWindow::Week => q_audit_trail::Period::DAY_7,
+        TimeWindow::Month => q_audit_trail::Period::DAY_30,
+        TimeWindow::All => q_audit_trail::Period::DAY_90,
+    }
+}
+
+fn type_filter_for_audit_trail(
+    filter: recondo_tui::lenses::audit::AuditType,
+) -> Option<q_audit_trail::AuditTypeFilter> {
+    use recondo_tui::lenses::audit::AuditType;
+    match filter {
+        AuditType::All => None,
+        AuditType::Requests => Some(q_audit_trail::AuditTypeFilter::REQUESTS),
+        AuditType::Responses => Some(q_audit_trail::AuditTypeFilter::RESPONSES),
+        AuditType::Anomalies => Some(q_audit_trail::AuditTypeFilter::ANOMALIES),
+    }
+}
+
+async fn fetch_audit_trail(
+    url: &str,
+    api_key: &Option<String>,
+    vars: AuditQueryVars,
+) -> std::result::Result<q_audit_trail::ResponseData, recondo_tui::error::AppError> {
+    let client = recondo_tui::gql::client::HttpClient::new(url.into(), api_key.clone())?;
+    let q_vars = q_audit_trail::Variables {
+        search: vars.search,
+        type_: type_filter_for_audit_trail(vars.type_filter),
+        period: Some(period_for_audit_trail(vars.period)),
+        limit: Some(vars.limit),
+        offset: Some(vars.offset),
+    };
+    client.query::<AuditTrail>(q_vars).await
 }
 
 // ---- Cost fetchers ----------------------------------------------------------

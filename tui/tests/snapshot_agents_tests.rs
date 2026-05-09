@@ -7,8 +7,8 @@ fn renders_summary_chart_and_tables() {
     lens.set_summary(AgentSummaryStats {
         total_agents: 12,
         total_sessions: 47,
-        total_cost: 14.20,
-        active_frameworks: 4,
+        average_turns_per_session: 8.5,
+        unique_developers: 5,
     });
     lens.set_framework_distribution(vec![
         FrameworkSlice {
@@ -45,7 +45,9 @@ fn renders_summary_chart_and_tables() {
         .map(|c| c.symbol())
         .collect();
     assert!(dump.contains("Agents"));
-    assert!(dump.contains("$14.20"));
+    assert!(dump.contains("8.5"));
+    assert!(dump.contains("Developers"));
+    assert!(!dump.contains("$0.00"));
     assert!(dump.contains("claude-code"));
     assert!(dump.contains("andmer"));
     assert!(dump.contains("recondo"));

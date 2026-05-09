@@ -37,6 +37,18 @@ fn palette_submit_routes_lens() {
 }
 
 #[test]
+fn palette_submit_routes_audit_lens() {
+    let mut s = AppState::new();
+    s.handle(KeyAction::OpenPalette);
+    for c in "audit".chars() {
+        s.handle(KeyAction::PaletteInput(c));
+    }
+    s.handle(KeyAction::Submit);
+    assert_eq!(s.lens(), Lens::Audit);
+    assert_eq!(s.mode(), Mode::Normal);
+}
+
+#[test]
 fn quit_flag_set_only_in_normal_mode() {
     let mut s = AppState::new();
     s.handle(KeyAction::OpenPalette);

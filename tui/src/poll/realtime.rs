@@ -6,7 +6,7 @@
 //! data owned by the other two:
 //!   - `poll_realtime_stats_once` → `LensUpdate::RealtimeStats { .. }`
 //!   - `poll_realtime_feed_once`  → `LensUpdate::RealtimeFeed(rows)`
-//!   - `poll_gateway_status_once` → `LensUpdate::GatewayStatus { .. }`
+//!   - `poll_gateway_status_once` → `LensUpdate::GatewayStatus { healthy }`
 
 use crate::app::lens_update::LensUpdate;
 use crate::error::AppError;
@@ -42,8 +42,8 @@ where
 {
     match fetcher(()).await {
         Ok(resp) => {
-            let (healthy, port) = marshal_gateway_status(resp);
-            Some(LensUpdate::GatewayStatus { healthy, port })
+            let healthy = marshal_gateway_status(resp);
+            Some(LensUpdate::GatewayStatus { healthy })
         }
         Err(_) => None,
     }

@@ -21,6 +21,8 @@ fn three_rows() -> Vec<SessionRow> {
     vec![
         SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "claude-code".into(),
@@ -29,6 +31,8 @@ fn three_rows() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_b".into(),
+            provider: "openai".into(),
+            project: Some("proj-b".into()),
             started_at: "11:30".into(),
             model: "gpt-4o".into(),
             framework: "cursor".into(),
@@ -37,6 +41,8 @@ fn three_rows() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_c".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "10:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "codex".into(),
@@ -333,6 +339,7 @@ fn build_fake_sessions_response() -> recondo_tui::gql::queries::sessions::Respon
             offset: 0,
             items: vec![q::SessionsSessionsItems {
                 id: "ses_fake".into(),
+                project_id: Some("proj-a".into()),
                 started_at: chrono::Utc::now(),
                 ended_at: None,
                 model: Some("claude-3-5-sonnet".into()),

@@ -19,6 +19,8 @@ fn seed_sessions_into(state: &mut AppState) {
     state.sessions_mut().set_rows(vec![
         SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "claude-code".into(),
@@ -27,6 +29,8 @@ fn seed_sessions_into(state: &mut AppState) {
         },
         SessionRow {
             id: "ses_b".into(),
+            provider: "openai".into(),
+            project: Some("proj-b".into()),
             started_at: "11:30".into(),
             model: "gpt-4o".into(),
             framework: "cursor".into(),
@@ -35,6 +39,8 @@ fn seed_sessions_into(state: &mut AppState) {
         },
         SessionRow {
             id: "ses_c".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "10:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "codex".into(),
@@ -110,6 +116,20 @@ fn f_opens_sessions_filter_modal() {
     assert!(!s.sessions().filter_open());
     s.handle(KeyAction::CycleFilter);
     assert!(s.sessions().filter_open());
+}
+
+#[test]
+fn enter_on_open_sessions_filter_closes_modal_without_drilling() {
+    let mut s = AppState::new();
+    s.handle(KeyAction::OpenSessions);
+    seed_sessions_into(&mut s);
+    s.handle(KeyAction::CycleFilter);
+
+    s.handle(KeyAction::Drill);
+
+    assert_eq!(s.lens(), Lens::Sessions);
+    assert!(!s.sessions().filter_open());
+    assert_eq!(s.selection().session(), None);
 }
 
 #[test]

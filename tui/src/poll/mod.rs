@@ -3,6 +3,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::time::interval;
 
 pub mod agents;
+pub mod audit;
 pub mod cost;
 pub mod realtime;
 pub mod session_detail;

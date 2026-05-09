@@ -10,11 +10,12 @@ use crate::app::lens_update::LensUpdate;
 use crate::app::state::SessionsQueryVars;
 use crate::app::time_window::{days_for_window, TimeWindow};
 use crate::gql::queries::{
-    agent_framework_distribution, agent_summary, daily_spend, gateway_status, realtime_feed,
-    realtime_stats, session_detail, sessions, spend_by_framework, spend_by_model,
+    agent_framework_distribution, agent_summary, audit_trail, daily_spend, gateway_status,
+    realtime_feed, realtime_stats, session_detail, sessions, spend_by_framework, spend_by_model,
     spend_by_provider, top_developers, top_repositories, turn, usage_summary,
 };
 use crate::lenses::agents::{AgentSummaryStats, FrameworkSlice, TopRow};
+use crate::lenses::audit::AuditRow;
 use crate::lenses::cost::BreakdownRow;
 use crate::lenses::realtime::FeedRow;
 use crate::lenses::session_detail::{SessionDetailLens, TurnRow};
@@ -27,6 +28,8 @@ pub fn marshal_sessions(resp: sessions::ResponseData) -> Vec<SessionRow> {
         .into_iter()
         .map(|item| SessionRow {
             id: item.id,
+            provider: item.provider,
+            project: item.project_id,
             started_at: format_started_at(&item.started_at),
             model: item.model.unwrap_or_default(),
             framework: item.framework.unwrap_or_default(),
@@ -34,6 +37,29 @@ pub fn marshal_sessions(resp: sessions::ResponseData) -> Vec<SessionRow> {
             cost: item.total_cost_usd,
         })
         .collect()
+}
+
+pub fn marshal_audit_trail(resp: audit_trail::ResponseData) -> (Vec<AuditRow>, i32) {
+    let total = i32::try_from(resp.audit_trail.total).unwrap_or(i32::MAX);
+    let rows = resp
+        .audit_trail
+        .items
+        .into_iter()
+        .map(|item| AuditRow {
+            time: format_feed_time(&item.timestamp),
+            session_id: item.session_id,
+            sequence_num: i32::try_from(item.sequence_num).unwrap_or(i32::MAX),
+            provider: item.provider,
+            model: item.model,
+            request_hash: item.request_hash,
+            response_hash: item.response_hash,
+            tokens: i32::try_from(item.total_tokens).unwrap_or(i32::MAX),
+            integrity: format!("{:?}", item.integrity_status).to_lowercase(),
+            http_status: item.http_status.map(|v| i32::try_from(v).unwrap_or(0)),
+            capture_complete: item.capture_complete,
+        })
+        .collect();
+    (rows, total)
 }
 
 fn format_started_at(t: &chrono::DateTime<chrono::Utc>) -> String {
@@ -146,22 +172,16 @@ pub fn marshal_usage_summary(resp: usage_summary::ResponseData) -> (f64, Option<
     (s.total_cost_usd, Some(s.average_cost_delta))
 }
 
-/// Marshal an `AgentSummary` GraphQL response into the lens stats shape.
-/// Schema's `AgentSummary` and the lens's `AgentSummaryStats` diverge:
-/// the schema exposes `activeAgents`, `frameworkCount`, `totalSessions` (Int!)
-/// but no aggregate spend field. `total_cost` therefore comes from a
-/// separate v1.5 cross-query (likely `usageSummary.totalCostUsd`); we leave
-/// it at 0.0 here so the lens renders a stable zero rather than NaN.
+/// Marshal an `AgentSummary` GraphQL response into the lens stats shape. This
+/// mirrors the dashboard Agent Analytics cards: active agents, sessions,
+/// average turns per session, and unique developers.
 pub fn marshal_agent_summary(resp: agent_summary::ResponseData) -> AgentSummaryStats {
     let s = resp.agent_summary;
     AgentSummaryStats {
         total_agents: i32::try_from(s.active_agents).unwrap_or(i32::MAX),
         total_sessions: i32::try_from(s.total_sessions).unwrap_or(i32::MAX),
-        active_frameworks: i32::try_from(s.framework_count).unwrap_or(i32::MAX),
-        // v1: schema does not expose an aggregate cost on AgentSummary.
-        // Populated by a v1.5 cross-query joining usage_summary on the
-        // same period filter. Until then, 0.0 keeps the metric card stable.
-        total_cost: 0.0,
+        average_turns_per_session: s.average_turns_per_session,
+        unique_developers: i32::try_from(s.unique_developers).unwrap_or(i32::MAX),
     }
 }
 
@@ -261,17 +281,14 @@ pub fn marshal_realtime_feed(resp: realtime_feed::ResponseData) -> Vec<FeedRow> 
         .collect()
 }
 
-/// Marshal a `GatewayStatus` GraphQL response into (healthy, port). The
-/// schema's `GatewayStatus` does not expose a port field, so we hardcode
-/// 8443 (the gateway's published port). The canonical status vocabulary
-/// is defined by the data layer in `packages/recondo-data/src/realtime.ts`:
+/// Marshal a `GatewayStatus` GraphQL response into a health flag. The
+/// canonical status vocabulary is defined by the data layer in
+/// `packages/recondo-data/src/realtime.ts`:
 /// `"live"` (heartbeat within grace window) → healthy; `"offline"` and
 /// `"unknown"` (and anything else) → not healthy.
-pub fn marshal_gateway_status(resp: gateway_status::ResponseData) -> (bool, i32) {
+pub fn marshal_gateway_status(resp: gateway_status::ResponseData) -> bool {
     let s = resp.gateway_status;
-    let healthy = s.status.eq_ignore_ascii_case("live");
-    let port = 8443;
-    (healthy, port)
+    s.status.eq_ignore_ascii_case("live")
 }
 
 fn format_feed_time(t: &chrono::DateTime<chrono::Utc>) -> String {

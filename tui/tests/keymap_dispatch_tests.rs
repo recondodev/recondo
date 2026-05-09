@@ -14,14 +14,8 @@ fn lens_keys_route_correctly() {
     assert_eq!(dispatch_key(k('s'), Mode::Normal), KeyAction::OpenSessions);
     assert_eq!(dispatch_key(k('c'), Mode::Normal), KeyAction::OpenCost);
     assert_eq!(dispatch_key(k('a'), Mode::Normal), KeyAction::OpenAgents);
-    assert_eq!(
-        dispatch_key(shift('A'), Mode::Normal),
-        KeyAction::OpenAuditStub
-    );
-    assert_eq!(
-        dispatch_key(k('r'), Mode::Normal),
-        KeyAction::OpenReplayStub
-    );
+    assert_eq!(dispatch_key(shift('A'), Mode::Normal), KeyAction::OpenAudit);
+    assert_eq!(dispatch_key(k('r'), Mode::Normal), KeyAction::Noop);
 }
 
 #[test]

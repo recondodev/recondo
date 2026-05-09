@@ -29,7 +29,6 @@ fn metric_card_renders_label_and_value() {
 fn fixture() -> RealtimeSnapshot {
     RealtimeSnapshot {
         healthy: true,
-        port: 8443,
         active_providers: 3,
         active_sessions: 4,
         user_turns_per_min: 12,
@@ -56,7 +55,10 @@ fn realtime_lens_renders_metrics_and_status() {
         .map(|c| c.symbol())
         .collect();
     assert!(dump.contains("LIVE"));
-    assert!(dump.contains("8443"));
+    assert!(
+        !dump.contains("8443"),
+        "status pill must not render a hardcoded port"
+    );
     assert!(dump.contains("12")); // user turns
     assert!(dump.contains("$1.42")); // cost last hour
     assert!(dump.contains("250.0K")); // tokens last hour

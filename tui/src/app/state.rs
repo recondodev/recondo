@@ -6,6 +6,7 @@ use crate::app::selection::SelectionRegistry;
 use crate::app::tabs::PinnedTabs;
 use crate::app::time_window::TimeWindow;
 use crate::lenses::agents::AgentsLens;
+use crate::lenses::audit::{AuditLens, AuditType};
 use crate::lenses::cost::{drill_target, CostLens, GroupBy};
 use crate::lenses::realtime::RealtimeLens;
 use crate::lenses::session_detail::SessionDetailLens;
@@ -57,6 +58,17 @@ pub struct AgentsQueryVars {
     pub period: TimeWindow,
 }
 
+/// Variables describing the next Audit Trail query. This mirrors the
+/// dashboard AuditTrail page: period + optional text/type filters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditQueryVars {
+    pub search: Option<String>,
+    pub type_filter: AuditType,
+    pub period: TimeWindow,
+    pub limit: i64,
+    pub offset: i64,
+}
+
 pub struct AppState {
     mode: Mode,
     history: HistoryStack,
@@ -71,6 +83,7 @@ pub struct AppState {
     sessions: SessionsLens,
     cost: CostLens,
     agents: AgentsLens,
+    audit: AuditLens,
     session_detail: Option<SessionDetailLens>,
     turn_detail: Option<TurnDetailLens>,
 }
@@ -96,6 +109,7 @@ impl AppState {
             sessions: SessionsLens::new(),
             cost: CostLens::new(),
             agents: AgentsLens::new(),
+            audit: AuditLens::new(),
             session_detail: None,
             turn_detail: None,
         }
@@ -160,12 +174,18 @@ impl AppState {
             LensUpdate::SessionDetail(mut sd) => {
                 if let Some(prior) = self.session_detail.as_ref() {
                     let prior_filter = prior.search_filter().map(String::from);
-                    let prior_selected_id = prior.selected_turn_id().map(String::from);
+                    let prior_selected_id = if prior.session_id() == sd.session_id() {
+                        prior.selected_turn_id().map(String::from)
+                    } else {
+                        None
+                    };
                     if prior_filter.is_some() {
                         sd.set_search_filter(prior_filter);
                     }
                     if let Some(id) = prior_selected_id {
                         sd.set_selected_to_id(&id);
+                    } else if let Some(turn_id) = self.selection.turn() {
+                        sd.set_selected_to_id(turn_id);
                     }
                 } else if let Some(turn_id) = self.selection.turn() {
                     // Fresh SessionDetail load — honor a deep-link turn id
@@ -183,6 +203,7 @@ impl AppState {
             LensUpdate::AgentsFrameworkDist(rows) => self.agents.set_framework_distribution(rows),
             LensUpdate::AgentsTopDevs(rows) => self.agents.set_top_devs(rows),
             LensUpdate::AgentsTopRepos(rows) => self.agents.set_top_repos(rows),
+            LensUpdate::AuditTrail { rows, total } => self.audit.set_rows(rows, total),
             LensUpdate::RealtimeStats {
                 active_providers,
                 active_sessions,
@@ -205,9 +226,7 @@ impl AppState {
                 );
             }
             LensUpdate::RealtimeFeed(rows) => self.realtime.apply_feed_rows(rows),
-            LensUpdate::GatewayStatus { healthy, port } => {
-                self.realtime.apply_gateway_status(healthy, port)
-            }
+            LensUpdate::GatewayStatus { healthy } => self.realtime.apply_gateway_status(healthy),
         }
     }
 
@@ -219,6 +238,20 @@ impl AppState {
         }
         Some(AgentsQueryVars {
             period: self.window,
+        })
+    }
+
+    /// Returns the audit query variables when Audit is the active lens.
+    pub fn audit_query_vars(&self) -> Option<AuditQueryVars> {
+        if !matches!(self.history.current(), Lens::Audit) {
+            return None;
+        }
+        Some(AuditQueryVars {
+            search: self.audit.search_filter().map(String::from),
+            type_filter: self.audit.type_filter(),
+            period: self.window,
+            limit: 20,
+            offset: 0,
         })
     }
 
@@ -311,6 +344,13 @@ impl AppState {
         &mut self.agents
     }
 
+    pub fn audit(&self) -> &AuditLens {
+        &self.audit
+    }
+    pub fn audit_mut(&mut self) -> &mut AuditLens {
+        &mut self.audit
+    }
+
     pub fn session_detail(&self) -> Option<&SessionDetailLens> {
         self.session_detail.as_ref()
     }
@@ -340,8 +380,7 @@ impl AppState {
             (Mode::Normal, OpenSessions) => self.history.push(Lens::Sessions),
             (Mode::Normal, OpenCost) => self.history.push(Lens::Cost),
             (Mode::Normal, OpenAgents) => self.history.push(Lens::Agents),
-            (Mode::Normal, OpenAuditStub) => self.history.push(Lens::AuditStub),
-            (Mode::Normal, OpenReplayStub) => self.history.push(Lens::ReplayStub),
+            (Mode::Normal, OpenAudit) => self.history.push(Lens::Audit),
             (Mode::Normal, OpenHelp) => self.history.push(Lens::Help),
             (Mode::Normal, OpenPalette) => {
                 self.mode = Mode::Palette;
@@ -434,13 +473,14 @@ impl AppState {
             Lens::Sessions => self.sessions.set_search_filter(filter),
             Lens::Cost => self.cost.set_search_filter(filter),
             Lens::Agents => self.agents.set_search_filter(filter),
+            Lens::Audit => self.audit.set_search_filter(filter),
             Lens::Realtime => self.realtime.set_search_filter(filter),
             Lens::SessionDetail => {
                 if let Some(sd) = self.session_detail.as_mut() {
                     sd.set_search_filter(filter);
                 }
             }
-            _ => {} // Help, Stub, TurnDetail: no list to filter
+            _ => {} // Help and TurnDetail: no list to filter
         }
     }
 
@@ -455,6 +495,7 @@ impl AppState {
                 }
             }
             Lens::Agents => self.agents.select_next(),
+            Lens::Audit => self.audit.select_next(),
             _ => {}
         }
     }
@@ -470,6 +511,7 @@ impl AppState {
                 }
             }
             Lens::Agents => self.agents.select_prev(),
+            Lens::Audit => self.audit.select_prev(),
             _ => {}
         }
     }
@@ -487,6 +529,7 @@ impl AppState {
                 }
             }
             Lens::Agents => self.agents.select_top(),
+            Lens::Audit => self.audit.select_top(),
             _ => {}
         }
     }
@@ -502,6 +545,7 @@ impl AppState {
                 }
             }
             Lens::Agents => self.agents.select_bottom(),
+            Lens::Audit => self.audit.select_bottom(),
             _ => {}
         }
     }
@@ -510,6 +554,7 @@ impl AppState {
         match self.history.current() {
             Lens::Sessions => self.sessions.open_filter(),
             Lens::Realtime => self.realtime.cycle_provider_filter(),
+            Lens::Audit => self.audit.cycle_type_filter(),
             _ => {}
         }
     }
@@ -526,9 +571,22 @@ impl AppState {
     fn dispatch_drill(&mut self) {
         match self.history.current() {
             Lens::Sessions => {
+                if self.sessions.filter_open() {
+                    self.sessions.close_filter();
+                    return;
+                }
                 let id = self.sessions.selected_id().map(|s| s.to_string());
                 if let Some(id) = id {
+                    let is_same_session = self
+                        .session_detail
+                        .as_ref()
+                        .is_some_and(|sd| sd.session_id() == id);
+                    if !is_same_session {
+                        self.session_detail = None;
+                        self.turn_detail = None;
+                    }
                     self.selection.set_session(Some(id));
+                    self.selection.set_turn(None);
                     self.history.push(Lens::SessionDetail);
                 }
             }
@@ -539,6 +597,10 @@ impl AppState {
                     .and_then(|sd| sd.selected_turn_id())
                     .map(|s| s.to_string());
                 if let Some(id) = id {
+                    let is_same_turn = self.turn_detail.as_ref().is_some_and(|td| td.id == id);
+                    if !is_same_turn {
+                        self.turn_detail = None;
+                    }
                     self.selection.set_turn(Some(id));
                     self.history.push(Lens::TurnDetail);
                 }
@@ -559,6 +621,22 @@ impl AppState {
                     // next SessionDetail payload as a fresh load and honors
                     // selection.turn (instead of restoring a stale cursor).
                     self.session_detail = None;
+                    self.turn_detail = None;
+                    self.history.push(Lens::SessionDetail);
+                }
+            }
+            Lens::Audit => {
+                if let Some(id) = self.audit.selected_session_id().map(String::from) {
+                    let is_same_session = self
+                        .session_detail
+                        .as_ref()
+                        .is_some_and(|sd| sd.session_id() == id);
+                    if !is_same_session {
+                        self.session_detail = None;
+                        self.turn_detail = None;
+                    }
+                    self.selection.set_session(Some(id));
+                    self.selection.set_turn(None);
                     self.history.push(Lens::SessionDetail);
                 }
             }
@@ -582,7 +660,7 @@ impl AppState {
             Command::OpenSessions => self.history.push(Lens::Sessions),
             Command::OpenCost => self.history.push(Lens::Cost),
             Command::OpenAgents => self.history.push(Lens::Agents),
-            Command::OpenAudit => self.history.push(Lens::AuditStub),
+            Command::OpenAudit => self.history.push(Lens::Audit),
             Command::WindowToday => self.window = TimeWindow::Today,
             Command::WindowWeek => self.window = TimeWindow::Week,
             Command::WindowMonth => self.window = TimeWindow::Month,

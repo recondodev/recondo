@@ -12,8 +12,8 @@ use ratatui::{
 pub struct AgentSummaryStats {
     pub total_agents: i32,
     pub total_sessions: i32,
-    pub total_cost: f64,
-    pub active_frameworks: i32,
+    pub average_turns_per_session: f64,
+    pub unique_developers: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -216,9 +216,9 @@ impl AgentsLens {
         // First card title is "Agents" — the test asserts dump.contains("Agents").
         f.render_widget(
             MetricCard::new(
-                "Agents",
+                "Active Agents",
                 &self.summary.total_agents.to_string(),
-                Some("total"),
+                None,
             ),
             cards[0],
         );
@@ -231,14 +231,18 @@ impl AgentsLens {
             cards[1],
         );
         f.render_widget(
-            MetricCard::new("Cost", &format_cost(self.summary.total_cost), Some("total")),
+            MetricCard::new(
+                "Avg Turns/Session",
+                &format!("{:.1}", self.summary.average_turns_per_session),
+                None,
+            ),
             cards[2],
         );
         f.render_widget(
             MetricCard::new(
-                "Frameworks",
-                &self.summary.active_frameworks.to_string(),
-                Some("active"),
+                "Unique Developers",
+                &self.summary.unique_developers.to_string(),
+                None,
             ),
             cards[3],
         );

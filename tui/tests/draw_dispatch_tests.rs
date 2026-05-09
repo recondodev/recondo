@@ -41,7 +41,6 @@ fn ui_cache_seeds_realtime_lens() {
     let mut s = AppState::new();
     s.realtime_mut().set_snapshot(RealtimeSnapshot {
         healthy: true,
-        port: 8443,
         active_providers: 1,
         active_sessions: 2,
         user_turns_per_min: 5,

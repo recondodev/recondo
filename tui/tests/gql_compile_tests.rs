@@ -1,5 +1,5 @@
 use recondo_tui::gql::queries::{
-    AgentFrameworkDistribution, AgentSummary, DailySpend, GatewayStatus, RealtimeFeed,
+    AgentFrameworkDistribution, AgentSummary, AuditTrail, DailySpend, GatewayStatus, RealtimeFeed,
     RealtimeStats, SessionDetail, Sessions, SpendByFramework, SpendByModel, SpendByProvider,
     TopDevelopers, TopRepositories, Turn, UsageSummary,
 };
@@ -14,6 +14,7 @@ fn all_query_structs_exist() {
         std::any::type_name::<Sessions>(),
         std::any::type_name::<SessionDetail>(),
         std::any::type_name::<Turn>(),
+        std::any::type_name::<AuditTrail>(),
         std::any::type_name::<SpendByProvider>(),
         std::any::type_name::<SpendByModel>(),
         std::any::type_name::<SpendByFramework>(),

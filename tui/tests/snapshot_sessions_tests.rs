@@ -5,6 +5,8 @@ fn rows() -> Vec<SessionRow> {
     vec![
         SessionRow {
             id: "ses_a".into(),
+            provider: "anthropic".into(),
+            project: Some("proj-a".into()),
             started_at: "12:00".into(),
             model: "claude-3-5-sonnet".into(),
             framework: "claude-code".into(),
@@ -13,6 +15,8 @@ fn rows() -> Vec<SessionRow> {
         },
         SessionRow {
             id: "ses_b".into(),
+            provider: "openai".into(),
+            project: Some("proj-b".into()),
             started_at: "11:30".into(),
             model: "gpt-4o".into(),
             framework: "cursor".into(),
@@ -79,6 +83,10 @@ fn open_filter_modal_renders_overlay() {
     assert!(dump.contains("Provider"));
     assert!(dump.contains("Model"));
     assert!(dump.contains("Framework"));
+    assert!(
+        !dump.contains("not yet enforced"),
+        "filter modal should not advertise stale phantom wiring"
+    );
 }
 
 #[test]
@@ -91,4 +99,17 @@ fn apply_filter_narrows_rows() {
     let visible = lens.rows_sorted();
     assert_eq!(visible.len(), 1);
     assert_eq!(visible[0].framework, "cursor");
+}
+
+#[test]
+fn provider_and_project_filters_narrow_rows() {
+    let mut lens = SessionsLens::with_rows(rows());
+    lens.set_filter(SessionFilter {
+        provider: Some("anthropic".into()),
+        project: Some("proj-a".into()),
+        ..Default::default()
+    });
+    let visible = lens.rows_sorted();
+    assert_eq!(visible.len(), 1);
+    assert_eq!(visible[0].id, "ses_a");
 }
