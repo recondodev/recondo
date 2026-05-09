@@ -1,0 +1,126 @@
+name: Gateway CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Pinned to a specific Rust release so a new stable doesn't silently
+  # introduce new clippy lints (or remove deprecated ones) and break CI
+  # without warning. Bump deliberately; do not use `@stable`.
+  RUST_VERSION: "1.95.0"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job 1: Lint (cargo fmt + clippy)
+  # ------------------------------------------------------------------
+  # Kept separate from the test job so a fmt/clippy regression fails
+  # fast without waiting on the postgres + ministack service containers
+  # to boot.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gateway
+
+      - name: Check formatting
+        run: cd gateway && cargo fmt --all -- --check
+
+      - name: Run clippy
+        # Lint with the union of features so PG/S3-gated test files
+        # (under #[cfg(feature = "postgres-tests")] / "s3-tests") are
+        # type-checked. clippy doesn't run code, so no services needed.
+        run: cd gateway && cargo clippy --features test-support,postgres-tests,s3-tests --tests -- -D warnings
+
+      - name: Lint architecture (driver/use-case boundary)
+        run: cargo run --quiet --package xtask -- lint-arch
+
+  # ------------------------------------------------------------------
+  # Job 2: Test (single build, all features, container fixtures own
+  # docker lifecycle)
+  # ------------------------------------------------------------------
+  # One job, one cargo target/, one nextest invocation. Features:
+  #   test-support  — default integration tests
+  #   postgres-tests — exercises advisory-lock seq race, JSONB binds,
+  #                    multi-instance writers (PG-only failure surface)
+  #   s3-tests       — exercises the S3ObjectStore against a live
+  #                    S3-compatible endpoint (ministack)
+  #
+  # Postgres + ministack containers are NOT declared as job services.
+  # Each test binary spawns its own ephemeral container via
+  # `gateway/tests/common/{pg_container,s3_container}.rs` (testcontainers-rs).
+  # Migrations run inside the same process via `npm run migrate`, so
+  # the api/node_modules step below is a hard prerequisite.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gateway
+
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Install api dependencies (node-pg-migrate is invoked from pg_container fixture)
+        run: cd api && pnpm install --frozen-lockfile
+
+      - name: Pre-build xtask (avoids cargo-lock race in batch8_m4_tests)
+        run: cargo build --package xtask
+
+      # ubuntu-latest ships with ~14 GB free on /. Reclaim ~25 GB by
+      # purging toolchains we don't use, so intermediate link artifacts
+      # never push the runner toward swap or SIGBUS the linker.
+      - name: Free disk + show resources
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
+          free -h
+
+      - name: Run tests with nextest
+        env:
+          # Cap parallel rustc/link jobs. Compilation of recondo-gateway's
+          # 30+ test binaries (each statically linking aws-sdk-s3 + ring +
+          # rustls + tokio-postgres) can have peak link RSS >4 GB per
+          # process under rust-lld. With the default -j 4 on ubuntu-latest
+          # (16 GB), four concurrent links collide and the OOM killer
+          # SIGBUSes the linker. Halving parallelism keeps peak well under
+          # the ceiling at ~30% wall-clock cost.
+          CARGO_BUILD_JOBS: "2"
+        run: cd gateway && cargo nextest run --features test-support,postgres-tests,s3-tests
