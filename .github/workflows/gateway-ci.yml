@@ -86,6 +86,10 @@ jobs:
         with:
           node-version: '20'
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: gateway
@@ -94,7 +98,7 @@ jobs:
         run: cargo install cargo-nextest --locked
 
       - name: Install api dependencies (node-pg-migrate is invoked from pg_container fixture)
-        run: cd api && npm ci --ignore-scripts
+        run: cd api && pnpm install --frozen-lockfile
 
       - name: Pre-build xtask (avoids cargo-lock race in batch8_m4_tests)
         run: cargo build --package xtask
