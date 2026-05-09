@@ -1,18 +1,8 @@
 /**
- * D-C12-1, D-C12-2, D-C12-3 (integration) — `recondo-mcp config <flavor>`.
+ * `recondo-mcp config <flavor>` integration coverage.
  *
- * Spawn the built `dist/bin/recondo-mcp.js` with `config <flavor>` args.
- * The binary prints the registration JSON to stdout and exits 0 (or
- * exits non-zero with an error to stderr for unsupported flavors / bad
- * flags).
- *
- * Hardening restores `--scoped <project_id>` as a first-class config
- * option: the binary mints a scoped key and injects it into the emitted
- * env as `RECONDO_API_KEY`.
- *
- * Skips when the binary isn't built. NOT gated on DATABASE_URL — the
- * Normal config subcommands remain DB-free. The scoped variant is gated
- * on DATABASE_URL because it intentionally mints a DB-backed key.
+ * The binary prints remote Streamable HTTP registration JSON to stdout
+ * and exits. It does not emit child-process registration config.
  */
 import { describe, it, expect } from "vitest";
 import { spawn } from "node:child_process";
@@ -67,19 +57,13 @@ async function runConfig(
   });
 }
 
-describeIfBinary("D-C12-1 recondo-mcp config claude-code (integration)", () => {
-  it("emits valid JSON to stdout and exits zero", async () => {
+describeIfBinary("recondo-mcp config claude-code", () => {
+  it("emits valid remote JSON to stdout and exits zero", async () => {
     const result = await runConfig(["config", "claude-code"], {
-      DATABASE_URL: "postgres://app:secret@db.example/recondo",
-      RECONDO_OBJECT_STORE_PATH: "/var/recondo/objects",
+      RECONDO_MCP_URL: "http://localhost:4001/mcp",
     });
-    expect(
-      result.code,
-      `non-zero exit; stderr: ${result.stderr}`,
-    ).toBe(0);
+    expect(result.code, `non-zero exit; stderr: ${result.stderr}`).toBe(0);
 
-    // stdout must parse as a single JSON document. Some CLIs trail a
-    // newline — strip whitespace before parsing.
     const trimmed = result.stdout.trim();
     expect(trimmed.length).toBeGreaterThan(0);
     let parsed: unknown;
@@ -87,65 +71,50 @@ describeIfBinary("D-C12-1 recondo-mcp config claude-code (integration)", () => {
       parsed = JSON.parse(trimmed);
     }, `stdout did not parse as JSON: ${trimmed.slice(0, 400)}`).not.toThrow();
 
-    // Top-level shape exactly matches Claude Code's MCP config schema.
     const obj = parsed as Record<string, unknown>;
     expect(obj).toHaveProperty("mcpServers");
     const recondo = (obj.mcpServers as Record<string, unknown>)
       .recondo as Record<string, unknown>;
-    expect(recondo.command).toBe("recondo-mcp");
-    const env = recondo.env as Record<string, string>;
-    expect(env.DATABASE_URL).toBe("postgres://app:secret@db.example/recondo");
-    expect(env.RECONDO_OBJECT_STORE_PATH).toBe("/var/recondo/objects");
-    expect(env).not.toHaveProperty("RECONDO_API_KEY");
+    expect(recondo).toMatchObject({
+      type: "streamable-http",
+      url: "http://localhost:4001/mcp",
+    });
+    expect(recondo).not.toHaveProperty("headers");
+    expect(recondo).not.toHaveProperty("command");
+    expect(recondo).not.toHaveProperty("env");
   });
 
-  it("can emit CLI args and propagated dev env", async () => {
-    const result = await runConfig(
-      ["config", "claude-code", "--emit-args", "--allow-actions"],
-      {
-        DATABASE_URL: "postgres://app:secret@db.example/recondo",
-        RECONDO_OBJECT_STORE_PATH: "/var/recondo/objects",
-        RECONDO_DEV_BYPASS: "1",
-        RECONDO_DATA_DIR: "/var/recondo/data",
-        RECONDO_OBJECTS: "/var/recondo/raw-objects",
-        NODE_ENV: "development",
-      },
-    );
+  it("can derive the local URL from RECONDO_MCP_PORT", async () => {
+    const result = await runConfig(["config", "claude-code"], {
+      RECONDO_MCP_PORT: "4111",
+    });
     expect(result.code, `stderr: ${result.stderr}`).toBe(0);
     const parsed = JSON.parse(result.stdout.trim()) as {
-      mcpServers: { recondo: { args: string[]; env: Record<string, string> } };
+      mcpServers: { recondo: { url: string } };
     };
-    expect(parsed.mcpServers.recondo.args).toEqual(["--allow-actions"]);
-    expect(parsed.mcpServers.recondo.env).toMatchObject({
-      RECONDO_DEV_BYPASS: "1",
-      RECONDO_DATA_DIR: "/var/recondo/data",
-      RECONDO_OBJECTS: "/var/recondo/raw-objects",
-      NODE_ENV: "development",
-    });
+    expect(parsed.mcpServers.recondo.url).toBe("http://localhost:4111/mcp");
   });
 });
 
-describeIfBinary("D-C12-3 recondo-mcp config cursor (integration)", () => {
-  it("emits the cursor mcpServers shape", async () => {
+describeIfBinary("recondo-mcp config cursor", () => {
+  it("emits the cursor mcpServers remote shape", async () => {
     const result = await runConfig(["config", "cursor"], {
-      DATABASE_URL: "postgres://x",
-      RECONDO_OBJECT_STORE_PATH: "/y",
+      RECONDO_MCP_URL: "http://localhost:4001/mcp",
     });
     expect(result.code, `stderr: ${result.stderr}`).toBe(0);
     const parsed = JSON.parse(result.stdout.trim()) as Record<string, unknown>;
-    expect(parsed).toHaveProperty("mcpServers");
     const recondo = (parsed.mcpServers as Record<string, unknown>)
       .recondo as Record<string, unknown>;
-    expect(recondo.command).toBe("recondo-mcp");
-    expect(recondo).toHaveProperty("env");
+    expect(recondo.type).toBe("streamable-http");
+    expect(recondo.url).toBe("http://localhost:4001/mcp");
+    expect(recondo).not.toHaveProperty("command");
   });
 });
 
-describeIfBinary("D-C12-3 recondo-mcp config goose (integration)", () => {
-  it("emits the goose extensions/stdio shape", async () => {
+describeIfBinary("recondo-mcp config goose", () => {
+  it("emits the goose remote extension shape", async () => {
     const result = await runConfig(["config", "goose"], {
-      DATABASE_URL: "postgres://x",
-      RECONDO_OBJECT_STORE_PATH: "/y",
+      RECONDO_MCP_URL: "http://localhost:4001/mcp",
     });
     expect(result.code, `stderr: ${result.stderr}`).toBe(0);
     const parsed = JSON.parse(result.stdout.trim()) as Record<string, unknown>;
@@ -153,25 +122,31 @@ describeIfBinary("D-C12-3 recondo-mcp config goose (integration)", () => {
     expect(parsed).toHaveProperty("extensions");
     const recondo = (parsed.extensions as Record<string, unknown>)
       .recondo as Record<string, unknown>;
-    expect(recondo.type).toBe("stdio");
-    expect(recondo.cmd).toBe("recondo-mcp");
-    expect(recondo).toHaveProperty("env");
-    expect(recondo).toHaveProperty("args");
-    expect(recondo).toMatchObject({ enabled: true, name: "recondo" });
+    expect(recondo).toMatchObject({
+      enabled: true,
+      name: "recondo",
+      type: "streamable-http",
+      url: "http://localhost:4001/mcp",
+    });
+    expect(recondo).not.toHaveProperty("headers");
+    expect(recondo).not.toHaveProperty("cmd");
   });
 });
 
-describeIfBinaryAndDb("D-HARD scoped config — `--scoped` mints a key", () => {
-  it("`config claude-code --scoped my-project` emits a scoped API key exactly once", async () => {
-    const result = await runConfig(["config", "claude-code", "--scoped", "my-project"]);
+describeIfBinaryAndDb("scoped config — `--scoped` mints a key", () => {
+  it("`config claude-code --scoped my-project` emits a scoped bearer header exactly once", async () => {
+    const result = await runConfig(["config", "claude-code", "--scoped", "my-project"], {
+      RECONDO_MCP_URL: "http://localhost:4001/mcp",
+    });
     expect(result.code, `stderr: ${result.stderr}`).toBe(0);
     const parsed = JSON.parse(result.stdout.trim()) as {
-      mcpServers: { recondo: { env: Record<string, string> } };
+      mcpServers: { recondo: { headers: Record<string, string> } };
     };
-    const rawSecret = parsed.mcpServers.recondo.env.RECONDO_API_KEY;
-    expect(rawSecret).toMatch(/^wrt_/);
-    expect(result.stdout.match(/RECONDO_API_KEY/g)?.length).toBe(1);
+    const auth = parsed.mcpServers.recondo.headers.Authorization;
+    expect(auth).toMatch(/^Bearer wrt_/);
+    expect(result.stdout.match(/Authorization/g)?.length).toBe(1);
 
+    const rawSecret = auth.slice("Bearer ".length);
     const { getPool } = await import("@recondo/data");
     const keyHash = createHash("sha256").update(rawSecret).digest("hex");
     const pool = getPool();
@@ -187,12 +162,10 @@ describeIfBinaryAndDb("D-HARD scoped config — `--scoped` mints a key", () => {
   });
 });
 
-describeIfBinary("D-C12 unknown flavor — graceful failure", () => {
-  it("`config bogus` exits non-zero (does not silently emit)", async () => {
+describeIfBinary("unknown flavor", () => {
+  it("`config bogus` exits non-zero without partial JSON", async () => {
     const result = await runConfig(["config", "bogus-flavor"]);
     expect(result.code).not.toBe(0);
-    // No partial JSON on stdout — config dispatcher must validate the
-    // flavor BEFORE writing anything.
     expect(result.stdout.trim()).toBe("");
   });
 });

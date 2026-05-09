@@ -181,6 +181,7 @@ export const READ_OPT_OUTS: Record<string, string> = {
   // layer but not exposed as a tool (object access goes through
   // recondo_get_turn_raw_metadata / _chunk).
   LocalObjectStore: "capture-side object store driver, not a tool",
+  S3ObjectStore: "capture-side S3 object store driver, not a tool",
 
   // Object root resolver — used by getTurnRawMetadata / getTurnRawChunk
   // internally; the chunk/metadata tools are the public surface.

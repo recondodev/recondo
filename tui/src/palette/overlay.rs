@@ -1,8 +1,9 @@
 use crate::palette::commands::Command;
 use crate::palette::parser::parse_command;
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
@@ -49,7 +50,8 @@ impl PaletteOverlay {
         f.render_widget(Clear, r);
         f.render_widget(
             Paragraph::new(format!(":{}", self.buf))
-                .block(Block::default().borders(Borders::ALL).title("Command")),
+                .style(theme::elevated_body_style())
+                .block(theme::elevated_block("Command")),
             r,
         );
     }

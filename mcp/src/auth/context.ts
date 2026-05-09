@@ -25,6 +25,13 @@ export interface ResolveApiKeyArgs {
   apiKey?: string;
 }
 
+export class AuthUnauthorizedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthUnauthorizedError";
+  }
+}
+
 export async function resolveApiKey(args: ResolveApiKeyArgs): Promise<AuthContext> {
   if (args.devBypass) {
     return {
@@ -37,7 +44,7 @@ export async function resolveApiKey(args: ResolveApiKeyArgs): Promise<AuthContex
 
   const result = await authenticateApiKey(args.apiKey ?? null);
   if (!result) {
-    throw new Error("Invalid API key");
+    throw new AuthUnauthorizedError("Invalid API key");
   }
 
   return {

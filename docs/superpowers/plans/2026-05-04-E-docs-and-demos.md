@@ -1,5 +1,7 @@
 # Documentation and Demos Implementation Plan
 
+> **Superseded MCP note (2026-05-07):** Any MCP install/demo wording in this plan that describes a local-subprocess server is obsolete. User-facing docs and demos must describe `recondo-mcp` as a long-running remote Streamable HTTP service, normally available at `http://localhost:4001/mcp` in fullstack.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the user-facing documentation at recondo.dev/docs and the two demo videos that anchor Recondo's OSS adoption story — TUI 60-second demo (cross-tool god-view) and MCP 30-second demo (agent introspecting its own history).
@@ -142,7 +144,7 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
 3. **The peer-transport claim, stated explicitly** (verbatim required by Step 14):
    > **MCP is a peer transport, not a wrapper over the API.** The MCP server imports `recondo-data` directly and calls its functions in-process. There is no HTTP hop from the MCP into the GraphQL API at any point. Tomorrow we could add a fourth transport (gRPC, say) by adding another package that imports `recondo-data` and exposes it on its protocol; none of GraphQL, MCP, or the new transport would need to know about each other.
 4. **What `recondo-data` owns and what it doesn't.** Owns: DB pool factory, query operations, object-store access, the existing path-masking module (`placeholder-mask.ts`), `ApiKeyInfo` type, `authenticateApiKey(token)`. Does **not** own: HTTP, GraphQL schema, MCP tool registration, anything transport-shaped. Also does **not** own credential-pattern redaction in v1 — that's deferred to a future global pass; raw captured content (sans filesystem-path masks) flows through every transport today.
-5. **Auth across transports.** Three different acquisition mechanisms (Authorization header, env var, header) all converge on the same `ApiKeyInfo`. Section cross-references `tui/first-run.md` and `mcp/auth-modes.md`.
+5. **Auth across transports.** Authorization headers and local dev-bypass all converge on the same `ApiKeyInfo`. Section cross-references `tui/first-run.md` and `mcp/auth-modes.md`.
 6. **Immutability invariant.** Captured records — sessions, turns, tool calls, capture metadata, audit-log entries — are append-only. The gateway is the sole writer. No transport can mutate captures. Action tools (where present) only touch governance metadata.
 7. **Path-masking-on-read versus on-disk bytes.** Path-masking (`placeholder-mask.ts`) modifies filesystem paths in what consumers *see*; original bytes remain byte-perfect in the object store. The gateway CLI bypasses path-masking entirely — see `forensics/unredacted-access.md`. Credential-pattern redaction is **not** in v1; captured prompts return raw through every transport today.
 8. **Where to read more** — pointers to `CLAUDE.md`, `docs/CLOUD_ARCHITECTURE.md`, the design spec at `docs/superpowers/specs/2026-05-04-tui-and-mcp-design.md`.
@@ -225,27 +227,25 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
 
 **`install.md` outline:**
 
-1. **What the MCP is** — a stdio MCP server that gives any MCP-aware agent read access (and, with `--allow-actions`, mutation access) to your Recondo capture history. Cross-reference `architecture.md` for the peer-transport claim.
-2. **Install the binary** — `npm install -g @recondo/mcp` once published; for now, `pnpm --filter recondo-mcp build` from the workspace produces a binary at `mcp/bin/recondo-mcp`.
-3. **The `recondo-mcp config` helper command.** The MCP binary's `config` subcommand emits a JSON registration snippet for the active environment.
-   - Default invocation: `recondo-mcp config` — emits a snippet with `DATABASE_URL`, `RECONDO_OBJECT_STORE_PATH`, and other infra env vars derived from the running environment; omits `RECONDO_API_KEY` (so the agent inherits the dev-bypass admin context).
-   - Scoped invocation: `recondo-mcp config --scoped <project_id>` — mints a scoped API key in `api_keys` and emits a snippet with `RECONDO_API_KEY=wrt_...` set to that key.
-   - Per-client formats: `--client claude-code` (default), `--client cursor`, `--client goose` — emit the JSON shape that client expects.
+1. **What the MCP is** — a long-running remote Streamable HTTP MCP service that gives any MCP-aware agent read access (and, with `--allow-actions`, mutation access) to your Recondo capture history. Cross-reference `architecture.md` for the peer-transport claim.
+2. **Start the service** — `just fullstack` starts `recondo-mcp` alongside the API at `http://localhost:4001/mcp`; container deployments run the same `Dockerfile.mcp` image.
+3. **The `recondo-mcp config` helper command.** The MCP binary's `config` subcommand emits a remote registration snippet for a running service URL.
+   - Default invocation: `recondo-mcp config claude-code` — emits a snippet pointing at `RECONDO_MCP_URL` or `http://localhost:${RECONDO_MCP_PORT:-4001}/mcp`; omits credentials.
+   - Scoped invocation: `recondo-mcp config claude-code --scoped <project_id>` — mints a scoped API key in `api_keys` and emits an `Authorization: Bearer wrt_...` header.
+   - Per-client formats: `config claude-code`, `config cursor`, `config goose` — emit the JSON shape that client expects.
    - Example output (default, Claude Code):
      ```json
      {
        "mcpServers": {
          "recondo": {
-           "command": "recondo-mcp",
-           "env": {
-             "DATABASE_URL": "postgres://recondo:recondo_dev@localhost:5432/recondo",
-             "RECONDO_OBJECT_STORE_PATH": "/Users/you/.recondo/objects"
-           }
+           "type": "streamable-http",
+           "url": "http://localhost:4001/mcp",
+           "headers": {}
          }
        }
      }
      ```
-   - **Recommended workflow**: run `recondo-mcp config --client claude-code >> ~/.claude/mcp_servers.json` (then merge by hand if the file already has `mcpServers`), restart the agent, verify the tool list appears.
+   - **Recommended workflow**: run `just fullstack`, then `RECONDO_MCP_URL=http://localhost:4001/mcp recondo-mcp config claude-code >> ~/.claude/mcp_servers.json` (then merge by hand if the file already has `mcpServers`), restart the agent, verify the tool list appears.
 4. **Pointer to the per-client snippet pages** below.
 
 **`install-claude-code.md` — the actual file path and snippet:**
@@ -256,11 +256,9 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
   {
     "mcpServers": {
       "recondo": {
-        "command": "recondo-mcp",
-        "env": {
-          "DATABASE_URL": "postgres://recondo:recondo_dev@localhost:5432/recondo",
-          "RECONDO_OBJECT_STORE_PATH": "/Users/you/.recondo/objects"
-        }
+        "type": "streamable-http",
+        "url": "http://localhost:4001/mcp",
+        "headers": {}
       }
     }
   }
@@ -270,17 +268,16 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
   {
     "mcpServers": {
       "recondo": {
-        "command": "recondo-mcp",
-        "env": {
-          "DATABASE_URL": "postgres://recondo:recondo_dev@localhost:5432/recondo",
-          "RECONDO_OBJECT_STORE_PATH": "/Users/you/.recondo/objects",
-          "RECONDO_API_KEY": "wrt_..."
+        "type": "streamable-http",
+        "url": "https://recondo.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer wrt_..."
         }
       }
     }
   }
   ```
-- **With actions enabled (advanced)** — show how to add `"args": ["--allow-actions"]`; describe the `--allow-destructive` second-flag escalation; warn about prompt-injection risk verbatim.
+- **With actions enabled (advanced)** — describe that action flags are service startup flags, not client registration args. Show enabling them in the MCP service/container env or command; describe the `--allow-destructive` second-flag escalation; warn about prompt-injection risk verbatim.
 - **Verifying the install** — start a Claude Code session, run `/mcp` (or whatever the current Claude Code MCP-list command is), confirm `recondo` appears, ask Claude Code: *"What sessions did I run today?"* — confirm `recondo_list_sessions` is invoked.
 
 **`install-cursor.md`:**
@@ -294,16 +291,14 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
   ```yaml
   extensions:
     recondo:
-      type: stdio
-      cmd: recondo-mcp
-      envs:
-        DATABASE_URL: postgres://recondo:recondo_dev@localhost:5432/recondo
-        RECONDO_OBJECT_STORE_PATH: /Users/you/.recondo/objects
+      type: streamable-http
+      url: http://localhost:4001/mcp
+      headers: {}
   ```
 - Add a note: confirm against current Goose docs because the format has moved.
 
 **`auth-modes.md`:**
-- Restate the dev-bypass-default-then-opt-in-key model from the spec. Cover: `RECONDO_DEV_BYPASS=1`, `NODE_ENV=development` fallback, what production refusal looks like, the per-process cache of the validated key, and the explicit "no silent fallback if a key is malformed/revoked" guarantee.
+- Restate the dev-bypass-default-then-opt-in-key model from the spec. Cover: `RECONDO_DEV_BYPASS=1` with `NODE_ENV=development`, what production refusal looks like, bearer-key headers for remote clients, and the explicit "no silent fallback if a key is malformed/revoked" guarantee.
 
 **Steps**
 - [ ] Write each page.
@@ -406,7 +401,7 @@ justfile                                   # MODIFIED — adds `docs-tool-catalo
    - Streaming-prep contracts (`AsyncIterable`, `AbortSignal`, uniform list envelope, `is_final: true`, `stream_id: null`) are landed in v1 so v1.5 can light up streaming without a refactor.
    - Real-time character-by-character streaming is the agent CLI's job, not Recondo's.
 4. **Single-user god-mode default.**
-   - In dev (`NODE_ENV=development`), TUI without a key gets full historical, cross-project access; MCP without `RECONDO_API_KEY` does the same.
+   - In dev (`NODE_ENV=development`), TUI without a key gets full historical, cross-project access; local fullstack MCP does the same via `RECONDO_DEV_BYPASS=1`.
    - Multi-user / scoped-key deployments (different agents → different `project_id` scopes) are out of scope for v1. The seam exists in `recondo-data` (pass a non-admin key; everything scopes via `ctx.apiKey.projectId`); v2 lights it up.
    - In production (`NODE_ENV=production` and `RECONDO_DEV_BYPASS` unset) both transports refuse to start without a key. Document the production posture so users don't accidentally ship dev-bypass.
 5. **No replay/diff in v1.** Tracked as v1.5; the `r` lens in the TUI opens a stub.

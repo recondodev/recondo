@@ -1,7 +1,8 @@
+use crate::ui::theme;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, Borders, Clear, Paragraph, Widget},
+    widgets::{Clear, Paragraph, Widget},
 };
 
 /// Centered modal overlay used by lenses to surface filter/help dialogs over
@@ -22,7 +23,8 @@ impl<'a> Widget for Modal<'a> {
         Clear.render(r, buf);
         let text = self.body.join("\n");
         Paragraph::new(text)
-            .block(Block::default().borders(Borders::ALL).title(self.title))
+            .style(theme::elevated_body_style())
+            .block(theme::elevated_block(self.title))
             .render(r, buf);
     }
 }

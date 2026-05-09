@@ -1,0 +1,51 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Install any corporate CA certificates dropped into docker/ca-certs/.
+# No-op if the directory contains only .gitkeep / README.md.
+COPY docker/ca-certs/ /tmp/recondo-ca-certs/
+RUN set -eu; \
+    mkdir -p /etc/ssl/recondo; \
+    : > /etc/ssl/recondo/bundle.pem; \
+    for f in /tmp/recondo-ca-certs/*.pem /tmp/recondo-ca-certs/*.crt; do \
+        [ -f "$f" ] || continue; \
+        cat "$f" >> /etc/ssl/recondo/bundle.pem; \
+        echo "" >> /etc/ssl/recondo/bundle.pem; \
+    done; \
+    rm -rf /tmp/recondo-ca-certs; \
+    if [ -s /etc/ssl/recondo/bundle.pem ]; then echo "Installed corporate CA certificates"; fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/recondo/bundle.pem
+
+# pnpm — this repo is a pnpm workspace and `mcp/package.json` declares
+# `@recondo/data: workspace:*`.
+RUN npm install -g pnpm@10
+
+# Workspace manifests first for layer caching.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY mcp/package.json ./mcp/
+COPY packages/recondo-data/package.json ./packages/recondo-data/
+
+RUN pnpm install --frozen-lockfile --filter "recondo-mcp..."
+
+# @recondo/data source — mcp compiles against its emitted .d.ts files.
+COPY packages/recondo-data/tsconfig.json ./packages/recondo-data/
+COPY packages/recondo-data/src ./packages/recondo-data/src
+
+# mcp source
+COPY mcp/tsconfig.json ./mcp/
+COPY mcp/src ./mcp/src
+
+# shared/placeholder-prefixes.json is loaded at runtime by
+# @recondo/data's placeholder-mask module.
+COPY shared ./shared
+
+RUN pnpm --filter @recondo/data build && pnpm --filter recondo-mcp build
+
+WORKDIR /app/mcp
+
+ENV RECONDO_MCP_HOST=0.0.0.0
+
+EXPOSE 4001
+
+CMD ["node", "dist/bin/recondo-mcp.js"]

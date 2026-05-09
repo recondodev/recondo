@@ -1,7 +1,7 @@
 /**
  * D-C5-1 (integration) — End-to-end `recondo_compare_turns`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed two turns across two sessions, then assert:
  *
  *   - `recondo_compare_turns` appears in `tools/list`.

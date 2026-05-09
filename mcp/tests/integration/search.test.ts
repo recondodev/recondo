@@ -1,7 +1,7 @@
 /**
  * D-C4-1 / D-C4-2 / D-C4-3 (integration) — End-to-end `recondo_search`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed a turn whose user_request_text + response_text contain a unique
  * search token, then assert:
  *

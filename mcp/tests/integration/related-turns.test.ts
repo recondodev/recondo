@@ -1,7 +1,7 @@
 /**
  * D-C5-3 (integration) — End-to-end `recondo_related_turns`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed a session with three turns where turn 2 supersedes turn 1 (i.e.
  * `supersedesTurnId = turn1.id` — the `retry_of` relation maps to this
  * column per Plan C C4 / data-layer header docstring), then assert:

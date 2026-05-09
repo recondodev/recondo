@@ -1,7 +1,7 @@
 /**
  * D-C10-8 (integration) — End-to-end action-tool gating via CLI flags.
  *
- * Spawns the recondo-mcp binary in stdio mode with various flag
+ * Spawns the recondo-mcp binary as a remote HTTP service with various flag
  * combinations and asserts the `tools/list` shape:
  *
  *   | flags                                  | tool count | rationale                                                |

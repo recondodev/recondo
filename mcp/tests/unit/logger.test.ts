@@ -1,9 +1,8 @@
 /**
  * D-C1-4 — Logger writes to stderr only.
  *
- * The MCP transport multiplexes JSON-RPC over stdout. ANY library log
- * line on stdout corrupts the wire. This test spies on
- * process.stdout.write and asserts ZERO calls when invoking
+ * The long-running service must not write normal logs to stdout. This
+ * test spies on process.stdout.write and asserts ZERO calls when invoking
  * logger.{info,warn,error}; each call also produces structured JSON on
  * stderr that includes the supplied fields.
  */

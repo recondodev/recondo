@@ -148,6 +148,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^11.14.0
+        version: 11.14.0
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.39
@@ -157,6 +160,9 @@ importers:
       pg:
         specifier: ^8.13.0
         version: 8.20.0
+      testcontainers:
+        specifier: ^11.14.0
+        version: 11.14.0
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
@@ -166,10 +172,16 @@ importers:
 
   packages/recondo-data:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1041.0
+        version: 3.1043.0
       pg:
         specifier: ^8.13.0
         version: 8.20.0
     devDependencies:
+      '@testcontainers/postgresql':
+        specifier: ^11.14.0
+        version: 11.14.0
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
@@ -179,6 +191,9 @@ importers:
       expect-type:
         specifier: ^1.0.0
         version: 1.3.0
+      testcontainers:
+        specifier: ^11.14.0
+        version: 11.14.0
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

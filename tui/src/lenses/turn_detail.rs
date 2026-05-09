@@ -1,6 +1,7 @@
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
     Frame,
 };
 
@@ -25,7 +26,8 @@ impl TurnDetailLens {
         );
         f.render_widget(
             Paragraph::new(body)
-                .block(Block::default().borders(Borders::ALL).title("Turn"))
+                .style(theme::body_style())
+                .block(theme::panel_block("Turn"))
                 .wrap(Wrap { trim: false }),
             area,
         );

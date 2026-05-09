@@ -1,8 +1,8 @@
+use crate::ui::theme;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect},
-    style::{Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, Widget},
+    widgets::{Cell, Row, Table, Widget},
 };
 
 pub struct VirtTable<'a> {
@@ -29,23 +29,24 @@ impl<'a> Widget for VirtTable<'a> {
                 .map(|h| Cell::from(*h))
                 .collect::<Vec<_>>(),
         )
-        .style(Style::default().add_modifier(Modifier::BOLD));
+        .style(theme::table_header_style());
         let body: Vec<Row> = self
             .rows
             .iter()
             .enumerate()
             .map(|(i, r)| {
                 let style = if i == self.selected {
-                    Style::default().add_modifier(Modifier::REVERSED)
+                    theme::selected_row_style()
                 } else {
-                    Style::default()
+                    theme::body_style()
                 };
                 Row::new(r.iter().map(|c| Cell::from(c.clone())).collect::<Vec<_>>()).style(style)
             })
             .collect();
         Table::new(body, widths)
             .header(header)
-            .block(Block::default().borders(Borders::ALL).title(self.title))
+            .style(theme::body_style())
+            .block(theme::panel_block(self.title))
             .render(area, buf);
     }
 }

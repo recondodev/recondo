@@ -3,9 +3,10 @@ use crate::app::lens::Lens;
 use crate::app::state::AppState;
 use crate::lenses::help::HelpOverlay;
 use crate::lenses::stub::StubLens;
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Clear, Paragraph},
     Frame,
 };
 
@@ -17,6 +18,8 @@ use ratatui::{
 /// from state to frame and does not own a separate cache.
 pub fn draw_app(f: &mut Frame<'_>, state: &AppState) {
     let area = f.area();
+    f.render_widget(Block::default().style(theme::app_style()), area);
+
     match state.lens() {
         Lens::Realtime => state.realtime().draw(f, area),
         Lens::Sessions => state.sessions().draw(f, area),
@@ -26,7 +29,8 @@ pub fn draw_app(f: &mut Frame<'_>, state: &AppState) {
             } else {
                 f.render_widget(
                     Paragraph::new("Loading session detail...")
-                        .block(Block::default().borders(Borders::ALL).title("Session")),
+                        .style(theme::body_style())
+                        .block(theme::panel_block("Session")),
                     area,
                 );
             }
@@ -37,7 +41,8 @@ pub fn draw_app(f: &mut Frame<'_>, state: &AppState) {
             } else {
                 f.render_widget(
                     Paragraph::new("Loading turn detail...")
-                        .block(Block::default().borders(Borders::ALL).title("Turn")),
+                        .style(theme::body_style())
+                        .block(theme::panel_block("Turn")),
                     area,
                 );
             }
@@ -62,7 +67,8 @@ pub fn draw_app(f: &mut Frame<'_>, state: &AppState) {
             f.render_widget(Clear, r);
             f.render_widget(
                 Paragraph::new(format!("/{}", state.search()))
-                    .block(Block::default().borders(Borders::ALL).title("Search")),
+                    .style(theme::elevated_body_style())
+                    .block(theme::elevated_block("Search")),
                 r,
             );
         }

@@ -1,17 +1,16 @@
 /**
  * Recondo MCP server bootstrap.
  *
- * Wires `McpServer` from `@modelcontextprotocol/sdk` with a stdio
- * transport, resolves the API key (or dev-bypass) into an
- * `AuthContext`, and registers the canonical read tools through the
- * `registerReadTool` helper. The `READ_TOOLS` array is the SINGLE
+ * Wires `McpServer` from `@modelcontextprotocol/sdk`, resolves the API
+ * key (or dev-bypass) into an `AuthContext`, and registers the
+ * canonical read tools through the `registerReadTool` helper. The
+ * `READ_TOOLS` array is the SINGLE
  * source of truth for the v1 read-tool catalog (28 entries after
  * insights was restored as a first-class tool). Any new read tool MUST be appended here so
  * the catalog count + parity lints stay accurate.
  */
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { resolveApiKey, type AuthContext } from "./auth/context.js";
 import { writeAuditEntry } from "./audit/writer.js";
@@ -314,9 +313,4 @@ export async function createMcpServer(
   }
 
   return server;
-}
-
-export async function connectStdio(server: McpServer): Promise<void> {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
 }

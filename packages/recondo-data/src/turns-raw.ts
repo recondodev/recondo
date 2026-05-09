@@ -11,7 +11,8 @@
  * Schema column reality (right-column names ONLY — see CLAUDE.md):
  *   - turns.request_hash         (NOT request_content_hash)
  *   - turns.req_bytes_size       (NOT request_bytes_total)
- *   - turns.req_bytes_ref        ("<kind>/<hash>.json.gz")
+ *   - turns.req_bytes_ref        ("objects/<kind>/<hash>.json.gz" or
+ *                                 "<kind>/<hash>.json.gz")
  *
  * Decisions baked into these contracts:
  *
@@ -37,25 +38,23 @@
  *     `async`) that validates synchronously, then delegates to an inner
  *     `async` helper.
  *
- *  5. Object-store resolution: both functions construct a
- *     `LocalObjectStore` rooted at the directory returned by
- *     `resolveObjectsRoot()`. Priority:
+ *  5. Object-store resolution: both functions construct an object-store
+ *     range reader from process env. `RECONDO_OBJECTS=s3` reads from the
+ *     configured `RECONDO_S3_BUCKET`; unset or `local` reads from the
+ *     local objects root. Local root priority:
  *       (a) `process.env.RECONDO_OBJECT_STORE_PATH` — points DIRECTLY at
  *           the objects root that contains `<kind>/<hash>.json.gz`
  *           subdirs (this is the env var the MCP layer surfaces).
  *       (b) `process.env.RECONDO_DATA_DIR` — gateway-style data dir;
  *           the helper appends `/objects` to match the on-disk layout.
  *       (c) `<home>/.recondo/objects` as the last-resort fallback.
- *     v1 deliberately ships only the local driver; if
- *     `RECONDO_OBJECTS=s3` is set, an explicit error is thrown. This is
- *     a genuine v1 scope cut, not a hidden fallback.
  */
 
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { getPool } from "./pool.js";
-import { LocalObjectStore } from "./object-store/local.js";
+import { LocalObjectStore, S3ObjectStore } from "./object-store/index.js";
 
 const HEAD_SAMPLE_BYTE_CAP = 4096;
 const CHUNK_LENGTH_CAP = 32_768;
@@ -84,16 +83,33 @@ export function resolveObjectsRoot(): string {
   return join(dataDir, "objects");
 }
 
-function ensureLocalDriver(): void {
-  // v1 only ships local. Tests do not exercise S3.
-  const driver = process.env.RECONDO_OBJECTS;
-  if (driver && driver !== "local") {
-    throw new Error(
-      `Object store driver ${JSON.stringify(driver)} is not supported by ` +
-        `getTurnRawMetadata / getTurnRawChunk in v1. Only RECONDO_OBJECTS=local ` +
-        `(or unset) is supported.`,
-    );
+interface ObjectRangeReader {
+  readRange(
+    kind: string,
+    hash: string,
+    offset: number,
+    length: number,
+    signal?: AbortSignal,
+  ): Promise<Buffer>;
+}
+
+function createObjectStoreFromEnv(): ObjectRangeReader {
+  const driver = process.env.RECONDO_OBJECTS ?? "local";
+  if (driver === "local") {
+    return new LocalObjectStore({ objectsRoot: resolveObjectsRoot() });
   }
+  if (driver === "s3") {
+    const bucket = process.env.RECONDO_S3_BUCKET;
+    if (!bucket) {
+      throw new Error("RECONDO_S3_BUCKET is required when RECONDO_OBJECTS=s3");
+    }
+    return new S3ObjectStore({ bucket });
+  }
+  throw new Error(
+    `Object store driver ${JSON.stringify(driver)} is not supported by ` +
+      `getTurnRawMetadata / getTurnRawChunk. Expected RECONDO_OBJECTS=local, ` +
+      `RECONDO_OBJECTS=s3, or unset.`,
+  );
 }
 
 /**
@@ -150,18 +166,23 @@ async function loadTurnRawRow(
 }
 
 /**
- * Parse a `req_bytes_ref` like `"req/<hash>.json.gz"` into `{ kind, hash }`.
+ * Parse a `req_bytes_ref` like `"objects/req/<hash>.json.gz"` or
+ * `"req/<hash>.json.gz"` into `{ kind, hash }`.
  * Falls back to `kind="req"` plus `hash` when the ref is null/empty.
  */
 function refToKindHash(ref: string | null, hash: string): { kind: string; hash: string } {
   if (ref && ref.length > 0) {
-    // Format produced by the gateway: `<kind>/<hash>.json.gz`.
-    const slash = ref.indexOf("/");
-    if (slash > 0) {
-      const kind = ref.slice(0, slash);
-      const tail = ref.slice(slash + 1);
-      const dot = tail.indexOf(".");
-      const refHash = dot >= 0 ? tail.slice(0, dot) : tail;
+    // Gateway rows may store backend keys (`objects/<kind>/<hash>.json.gz`)
+    // or backend-agnostic refs (`<kind>/<hash>.json.gz`).
+    const normalized = ref.startsWith("objects/")
+      ? ref.slice("objects/".length)
+      : ref;
+    const parts = normalized.split("/");
+    if (parts.length === 2 && parts[0].length > 0 && parts[1].length > 0) {
+      const [kind, filename] = parts;
+      const refHash = filename.endsWith(".json.gz")
+        ? filename.slice(0, -".json.gz".length)
+        : filename.split(".")[0];
       return { kind, hash: refHash };
     }
   }
@@ -183,12 +204,11 @@ export async function getTurnRawMetadata(
   // FIRST statement after argument validation — before any DB / fs I/O.
   // D-RM4 spies on pool.query and asserts it is never called.
   throwIfAborted(signal);
-  ensureLocalDriver();
 
   const row = await loadTurnRawRow(turnId, signal);
   const { kind, hash } = refToKindHash(row.req_bytes_ref, row.request_hash);
 
-  const store = new LocalObjectStore({ objectsRoot: resolveObjectsRoot() });
+  const store = createObjectStoreFromEnv();
   const head = await store.readRange(kind, hash, 0, HEAD_SAMPLE_BYTE_CAP, signal);
 
   return {
@@ -237,7 +257,6 @@ async function getTurnRawChunkAsync(
   // FIRST statement of the async path — before any DB / fs I/O.
   // D-RC4 spies on pool.query and asserts it is never called.
   throwIfAborted(signal);
-  ensureLocalDriver();
 
   const cappedLength = Math.min(length, CHUNK_LENGTH_CAP);
 
@@ -250,7 +269,7 @@ async function getTurnRawChunkAsync(
     return { offset, bytes: Buffer.alloc(0), next_offset: null };
   }
 
-  const store = new LocalObjectStore({ objectsRoot: resolveObjectsRoot() });
+  const store = createObjectStoreFromEnv();
   const bytes = await store.readRange(kind, hash, offset, cappedLength, signal);
 
   const endOffset = offset + bytes.length;

@@ -1,8 +1,5 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    widgets::{Block, Borders, Widget},
-};
+use crate::ui::theme;
+use ratatui::{buffer::Buffer, layout::Rect, style::Style, widgets::Widget};
 
 pub struct HBarChart<'a> {
     pub title: &'a str,
@@ -11,7 +8,7 @@ pub struct HBarChart<'a> {
 
 impl<'a> Widget for HBarChart<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let block = Block::default().borders(Borders::ALL).title(self.title);
+        let block = theme::panel_block(self.title);
         let inner = block.inner(area);
         block.render(area, buf);
         let max = self
@@ -25,14 +22,38 @@ impl<'a> Widget for HBarChart<'a> {
                 break;
             }
             let bar_w = ((v / max) * (inner.width as f64 * 0.6)) as u16;
-            let line = format!("{:<14} {:>6.2}  {}", label, v, "█".repeat(bar_w as usize));
-            for (xi, ch) in line.chars().enumerate() {
-                let x = inner.x + xi as u16;
-                if x >= inner.x + inner.width {
-                    break;
-                }
-                buf[(x, inner.y + i as u16)].set_symbol(&ch.to_string());
-            }
+            let y = inner.y + i as u16;
+            let label_text = format!("{label:<14}");
+            let value_text = format!(" {v:>6.2}  ");
+            let x = write_styled(buf, inner, y, inner.x, &label_text, theme::muted_style());
+            let x = write_styled(buf, inner, y, x, &value_text, theme::body_style());
+            write_styled(
+                buf,
+                inner,
+                y,
+                x,
+                &"█".repeat(bar_w as usize),
+                theme::chart_style(),
+            );
         }
     }
+}
+
+fn write_styled(
+    buf: &mut Buffer,
+    bounds: Rect,
+    y: u16,
+    start_x: u16,
+    text: &str,
+    style: Style,
+) -> u16 {
+    let mut x = start_x;
+    for ch in text.chars() {
+        if x >= bounds.x + bounds.width {
+            break;
+        }
+        buf[(x, y)].set_symbol(&ch.to_string()).set_style(style);
+        x += 1;
+    }
+    x
 }

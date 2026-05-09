@@ -1,9 +1,9 @@
 /**
  * Stderr-only structured logger for recondo-mcp.
  *
- * The MCP stdio transport multiplexes JSON-RPC over stdout. ANY library
- * log line on stdout corrupts the wire. This module writes EXCLUSIVELY
- * to process.stderr — never `console.log`, never `process.stdout.write`.
+ * The service uses stdout only for explicit CLI output, such as the
+ * `config` subcommand. Normal service logs write EXCLUSIVELY to
+ * process.stderr — never `console.log`, never `process.stdout.write`.
  *
  * Each call serialises `{...fields, level, msg}` to a single JSON line
  * suffixed with `\n`. Fields supplied by the caller win over `level`

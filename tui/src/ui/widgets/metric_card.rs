@@ -1,9 +1,9 @@
+use crate::ui::theme;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Widget, Wrap},
+    widgets::{Paragraph, Widget, Wrap},
 };
 
 pub struct MetricCard<'a> {
@@ -24,16 +24,17 @@ impl<'a> MetricCard<'a> {
 
 impl<'a> Widget for MetricCard<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let block = Block::default().borders(Borders::ALL).title(self.label);
+        let block = theme::panel_block(self.label);
         let mut lines = vec![Line::from(Span::styled(
             self.value,
-            Style::default().add_modifier(Modifier::BOLD),
+            theme::metric_value_style(),
         ))];
         if let Some(s) = self.subtitle {
-            lines.push(Line::from(Span::raw(s)));
+            lines.push(Line::from(Span::styled(s, theme::muted_style())));
         }
         Paragraph::new(lines)
             .block(block)
+            .style(theme::body_style())
             .wrap(Wrap { trim: true })
             .render(area, buf);
     }

@@ -1,7 +1,7 @@
 /**
  * D-C6-1 (integration) — End-to-end `recondo_realtime_overview`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * call `tools/list` to assert the tool is registered with the canonical
  * empty-input schema + 50+ char description, then call `tools/call` and
  * assert the structural shape `{stats, gateway_status}`.

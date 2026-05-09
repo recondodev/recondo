@@ -1,6 +1,6 @@
 /**
  * D-C12-4, D-C12-7, D-C12-8 (integration) — prompts/list, resources/list,
- * resources/read against the live MCP stdio surface.
+ * resources/read against the live remote MCP surface.
  *
  * Spawns the binary, drives JSON-RPC `prompts/list`, `prompts/get`,
  * `resources/list`, `resources/read` and asserts:

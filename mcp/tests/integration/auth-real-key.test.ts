@@ -49,6 +49,48 @@ function extractEnvelope(result: CallToolResult): Record<string, unknown> {
   );
 }
 
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function rawSessionRequest(
+  mcp: SpawnedMcp,
+  method: "GET" | "POST" | "DELETE",
+  bearerToken?: string,
+): Promise<Response> {
+  if (!mcp.sessionId) {
+    throw new Error("MCP session was not initialized");
+  }
+  const headers: Record<string, string> = {
+    accept: "application/json, text/event-stream",
+    "MCP-Session-Id": mcp.sessionId,
+    "MCP-Protocol-Version": "2025-11-25",
+  };
+  if (bearerToken) {
+    headers.authorization = `Bearer ${bearerToken}`;
+  }
+  const init: RequestInit = { method, headers };
+  if (method === "POST") {
+    headers["content-type"] = "application/json";
+    init.body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1001,
+      method: "tools/list",
+      params: {},
+    });
+  }
+  return fetchWithTimeout(`${mcp.baseUrl}/mcp`, init);
+}
+
 describeIfReady("D-C13-2 real-key project scoping", () => {
   let mcp: SpawnedMcp;
   let seeded: Awaited<ReturnType<typeof seedTestDb>> | null = null;
@@ -125,11 +167,11 @@ describeIfReady("D-C13-2 real-key project scoping", () => {
       [otherProjectId, otherSessionId],
     );
 
-    // Spawn the binary with the SCOPED key. Force-clear dev-bypass so
-    // the real-key path is exercised.
+    // Spawn the binary without dev-bypass and send the scoped key as an
+    // explicit bearer token so the production HTTP auth path is exercised.
     mcp = await spawnMcp({
+      bearerToken: scopedToken,
       env: {
-        RECONDO_API_KEY: scopedToken,
         RECONDO_OBJECT_STORE_PATH: "/tmp/recondo-objects",
         RECONDO_DEV_BYPASS: "",
         NODE_ENV: "production",
@@ -185,5 +227,31 @@ describeIfReady("D-C13-2 real-key project scoping", () => {
     // The scoped session MUST appear; the other-project session MUST NOT.
     expect(ids.has(scopedSessionId)).toBe(true);
     expect(ids.has(otherSessionId)).toBe(false);
+  });
+
+  it("revalidates bearer auth on resumed session requests", async () => {
+    const unauthPost = await rawSessionRequest(mcp, "POST");
+    expect(unauthPost.status, await unauthPost.text()).toBe(401);
+
+    const mismatchedPost = await rawSessionRequest(mcp, "POST", adminToken);
+    expect(mismatchedPost.status, await mismatchedPost.text()).toBe(401);
+
+    const unauthGet = await rawSessionRequest(mcp, "GET");
+    expect(unauthGet.status, await unauthGet.text()).toBe(401);
+
+    const unauthDelete = await rawSessionRequest(mcp, "DELETE");
+    expect(unauthDelete.status, await unauthDelete.text()).toBe(401);
+
+    const stillUsable = await mcp.request<CallToolResult>("tools/call", {
+      name: "recondo_list_sessions",
+      arguments: { limit: 1 },
+    });
+    expect(stillUsable.isError).not.toBe(true);
+
+    const { getPool } = await import("@recondo/data");
+    await getPool().query(`DELETE FROM api_keys WHERE id = $1`, [scopedKeyId]);
+
+    const revokedPost = await rawSessionRequest(mcp, "POST", scopedToken);
+    expect(revokedPost.status, await revokedPost.text()).toBe(401);
   });
 });

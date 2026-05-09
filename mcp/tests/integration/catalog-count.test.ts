@@ -1,8 +1,8 @@
 /**
  * D-C9-3 (integration) — End-to-end read-tool catalog count.
  *
- * Spawn the recondo-mcp binary in stdio mode WITHOUT any action flags
- * (default mode), call `tools/list`, and assert:
+ * Spawn the recondo-mcp binary as a remote HTTP service WITHOUT any
+ * action flags (default mode), call `tools/list`, and assert:
  *   1. exactly 28 tools are advertised (matches READ_TOOLS.length unit
  *      assertion). C10 ships action tools — but they only appear with
  *      `--allow-actions`, so the default-mode count stays 28.

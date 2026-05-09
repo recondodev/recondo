@@ -1,7 +1,8 @@
+use crate::ui::theme;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, Borders, Sparkline as RatSpark, Widget},
+    widgets::{Sparkline as RatSpark, Widget},
 };
 
 pub struct DailySpark<'a> {
@@ -12,7 +13,8 @@ pub struct DailySpark<'a> {
 impl<'a> Widget for DailySpark<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         RatSpark::default()
-            .block(Block::default().borders(Borders::ALL).title(self.title))
+            .block(theme::panel_block(self.title))
+            .style(theme::chart_style())
             .data(self.data)
             .render(area, buf);
     }

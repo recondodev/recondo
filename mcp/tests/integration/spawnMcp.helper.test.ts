@@ -19,25 +19,45 @@ const HAVE_BINARY = existsSync(RECONDO_MCP_BINARY);
 const describeIfReady = HAVE_DB && HAVE_BINARY ? describe : describe.skip;
 const describeIfBinary = HAVE_BINARY ? describe : describe.skip;
 
-function waitForExit(
-  child: { once(event: "close", cb: (code: number | null) => void): void },
+async function waitForHealth(
+  mcp: {
+    readonly baseUrl: string;
+    readonly child: {
+      exitCode: number | null;
+      signalCode: NodeJS.Signals | null;
+    };
+    readonly stderr: string;
+  },
   timeoutMs: number,
-): Promise<number | null | "timeout"> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve("timeout"), timeoutMs);
-    child.once("close", (code) => {
-      clearTimeout(timer);
-      resolve(code);
-    });
-  });
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastErr: unknown;
+  while (Date.now() < deadline) {
+    if (mcp.child.exitCode !== null || mcp.child.signalCode !== null) {
+      throw new Error(
+        `recondo-mcp exited before healthcheck; code=${mcp.child.exitCode} signal=${mcp.child.signalCode}; stderr=${mcp.stderr}`,
+      );
+    }
+    try {
+      const res = await fetch(`${mcp.baseUrl}/healthz`);
+      if (res.ok) return;
+      lastErr = new Error(`health status ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`timeout waiting for MCP healthcheck: ${String(lastErr)}`);
 }
 
 describeIfBinary("Group B spawnMcp helper auth defaults", () => {
   it("default spawn does not inject dev-bypass or NODE_ENV=development", async () => {
     const previousBypass = process.env.RECONDO_DEV_BYPASS;
     const previousNodeEnv = process.env.NODE_ENV;
+    const previousApiKey = process.env.RECONDO_API_KEY;
     process.env.RECONDO_DEV_BYPASS = "1";
     process.env.NODE_ENV = "development";
+    delete process.env.RECONDO_API_KEY;
     const mcp = await spawnMcp({
       initialize: false,
       env: {
@@ -48,14 +68,28 @@ describeIfBinary("Group B spawnMcp helper auth defaults", () => {
       timeoutMs: 500,
     });
     try {
-      const code = await waitForExit(mcp.child, 1500);
-      if (code === "timeout") {
-        await mcp.close();
-      }
-      expect(code, `server stayed alive; stderr=${mcp.stderr}`).not.toBe("timeout");
-      expect(code).not.toBe(0);
-      expect(mcp.stderr).toContain("RECONDO_API_KEY is required");
+      await waitForHealth(mcp, 5000);
+      const res = await fetch(`${mcp.baseUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-11-25",
+            capabilities: {},
+            clientInfo: { name: "spawn-helper-auth-defaults", version: "0" },
+          },
+        }),
+      });
+      expect(res.status).toBe(401);
+      expect(await res.text()).toContain("Authorization");
     } finally {
+      await mcp.close();
       if (previousBypass === undefined) {
         delete process.env.RECONDO_DEV_BYPASS;
       } else {
@@ -65,6 +99,11 @@ describeIfBinary("Group B spawnMcp helper auth defaults", () => {
         delete process.env.NODE_ENV;
       } else {
         process.env.NODE_ENV = previousNodeEnv;
+      }
+      if (previousApiKey === undefined) {
+        delete process.env.RECONDO_API_KEY;
+      } else {
+        process.env.RECONDO_API_KEY = previousApiKey;
       }
     }
   });

@@ -2,7 +2,6 @@ use crate::ui::theme;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Style,
     text::Span,
     widgets::{Paragraph, Widget},
 };
@@ -14,11 +13,13 @@ pub struct StatusPill {
 
 impl Widget for StatusPill {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (text, color) = if self.healthy {
-            (format!(" LIVE :{} ", self.port), theme::OK)
+        let (text, tone) = if self.healthy {
+            (format!(" LIVE :{} ", self.port), theme::StatusTone::Ok)
         } else {
-            (format!(" OFFLINE :{} ", self.port), theme::ERR)
+            (format!(" OFFLINE :{} ", self.port), theme::StatusTone::Err)
         };
-        Paragraph::new(Span::styled(text, Style::default().fg(color))).render(area, buf);
+        Paragraph::new(Span::styled(text, theme::status_badge_style(tone)))
+            .style(theme::app_style())
+            .render(area, buf);
     }
 }

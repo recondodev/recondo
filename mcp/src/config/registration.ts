@@ -1,21 +1,18 @@
 /**
- * `recondo-mcp config <flavor>` JSON emitter (D-C12-1, D-C12-3).
+ * `recondo-mcp config <flavor>` JSON emitter.
  *
  * Pure function — reads `process.env` (or an injected env), emits a
- * registration JSON document for the requested MCP-host flavor:
+ * remote Streamable HTTP registration JSON document for the requested
+ * MCP-host flavor:
  *
- *   - `claude-code` and `cursor` → `{mcpServers: {recondo: {command,
- *     env}}}`. (Identical wire shape per Plan D §Task 26.)
- *   - `goose` → `{extensions: {recondo: {type: "stdio", cmd, env}}}`.
+ *   - `claude-code` and `cursor` → `{mcpServers: {recondo: {type,
+ *     url, headers}}}`.
+ *   - `goose` → `{extensions: {recondo: {type, url, headers}}}`.
  *
  * When the binary handles `--scoped <project_id>`, it mints a scoped
- * key before calling this emitter and passes that raw secret via
- * `apiKey`. Normal config emission remains DB-free and never includes
- * `RECONDO_API_KEY` unless the caller supplies `apiKey`.
- *
- * The `env` object only includes vars that are actually set in the
- * input environment — no empty-string injection. The propagated vars are
- * runtime DB/object-store settings plus local-dev toggles.
+ * key before calling this emitter and passes that raw secret as an
+ * Authorization header. Normal config emission remains DB-free and
+ * never includes credentials unless the caller supplies `apiKey`.
  */
 
 export type RegistrationFlavor = "claude-code" | "cursor" | "goose";
@@ -35,44 +32,41 @@ export interface RegistrationOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-/** Env vars surfaced into the emitted registration block, in order. */
-const PROPAGATED_ENV_VARS = [
-  "DATABASE_URL",
-  "RECONDO_OBJECT_STORE_PATH",
-  "RECONDO_DEV_BYPASS",
-  "RECONDO_DATA_DIR",
-  "RECONDO_OBJECTS",
-  "NODE_ENV",
-] as const;
-
-const COMMAND = "recondo-mcp";
-
-function buildArgs(options: RegistrationOptions): string[] {
-  if (!options.includeArgs) return [];
-  const out: string[] = [];
-  if (options.flags?.allowActions) out.push("--allow-actions");
-  if (options.flags?.allowDestructive) out.push("--allow-destructive");
-  return out;
+function resolveMcpUrl(env: NodeJS.ProcessEnv): string {
+  const explicit = env.RECONDO_MCP_URL;
+  if (typeof explicit === "string" && explicit.length > 0) {
+    return explicit;
+  }
+  const port = env.RECONDO_MCP_PORT ?? env.PORT ?? "4001";
+  return `http://localhost:${port}/mcp`;
 }
 
-function buildEnvBlock(env: NodeJS.ProcessEnv): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const key of PROPAGATED_ENV_VARS) {
-    const v = env[key];
-    if (typeof v === "string" && v.length > 0) {
-      out[key] = v;
-    }
+function buildHeaders(apiKey?: string): Record<string, string> {
+  if (apiKey && apiKey.length > 0) {
+    return { Authorization: `Bearer ${apiKey}` };
   }
-  return out;
+  return {};
+}
+
+function buildServerConfig(
+  url: string,
+  headers: Record<string, string>,
+): Record<string, unknown> {
+  const server: Record<string, unknown> = {
+    type: "streamable-http",
+    url,
+  };
+  if (Object.keys(headers).length > 0) {
+    server.headers = headers;
+  }
+  return server;
 }
 
 export function emitRegistrationJson(options: RegistrationOptions): string {
   const env = options.env ?? process.env;
-  const envBlock = buildEnvBlock(env);
-  if (options.apiKey && options.apiKey.length > 0) {
-    envBlock.RECONDO_API_KEY = options.apiKey;
-  }
-  const args = buildArgs(options);
+  const url = resolveMcpUrl(env);
+  const headers = buildHeaders(options.apiKey);
+  const server = buildServerConfig(url, headers);
 
   let payload: Record<string, unknown>;
   switch (options.client) {
@@ -80,11 +74,7 @@ export function emitRegistrationJson(options: RegistrationOptions): string {
     case "cursor":
       payload = {
         mcpServers: {
-          recondo: {
-            command: COMMAND,
-            args,
-            env: envBlock,
-          },
+          recondo: server,
         },
       };
       break;
@@ -94,10 +84,7 @@ export function emitRegistrationJson(options: RegistrationOptions): string {
           recondo: {
             name: "recondo",
             enabled: true,
-            type: "stdio",
-            cmd: COMMAND,
-            args,
-            env: envBlock,
+            ...server,
           },
         },
       };

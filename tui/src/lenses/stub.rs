@@ -1,6 +1,7 @@
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
     Frame,
 };
 
@@ -25,8 +26,9 @@ impl StubLens {
     pub fn draw(&self, f: &mut Frame<'_>, area: Rect) {
         f.render_widget(
             Paragraph::new(self.body)
+                .style(theme::body_style())
                 .wrap(Wrap { trim: true })
-                .block(Block::default().borders(Borders::ALL).title(self.title)),
+                .block(theme::panel_block(self.title)),
             area,
         );
     }

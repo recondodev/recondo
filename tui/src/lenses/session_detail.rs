@@ -1,9 +1,10 @@
 use crate::format::format_cost;
 use crate::search::fuzzy::fuzzy_match;
+use crate::ui::theme;
 use crate::ui::widgets::table::VirtTable;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -130,7 +131,8 @@ impl SessionDetailLens {
             .split(area);
         f.render_widget(
             Paragraph::new(format!("Session {}", self.session_id))
-                .block(Block::default().borders(Borders::ALL).title("Session")),
+                .style(theme::body_style())
+                .block(theme::panel_block("Session")),
             chunks[0],
         );
         let display: Vec<Vec<String>> = self

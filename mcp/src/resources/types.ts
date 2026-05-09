@@ -3,8 +3,8 @@
  *
  * Each resource definition carries the URI template + a `read`
  * callback that the SDK invokes for `resources/read`. The catalog
- * unit test exercises the shape directly; the integration test
- * drives the SDK over stdio to validate the wire path end-to-end.
+ * unit test exercises the shape directly; the integration test drives
+ * the remote transport to validate the wire path end-to-end.
  *
  * Resources differ from tools in that they are addressed by URI, not
  * by name. The SDK uses the `uriTemplate` (RFC 6570) to match incoming

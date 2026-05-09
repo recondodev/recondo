@@ -1,7 +1,7 @@
 /**
  * D-C5-2 (integration) — End-to-end `recondo_find_similar_prompts`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed two turns whose `user_request_text` is byte-identical (so their
  * md5 hashes match), then assert the tool returns the OTHER turn as a
  * match (self-exclusion when input is a turn id).

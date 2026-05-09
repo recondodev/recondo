@@ -1,8 +1,5 @@
-use ratatui::{
-    layout::Rect,
-    widgets::{Block, Borders, Paragraph},
-    Frame,
-};
+use crate::ui::theme;
+use ratatui::{layout::Rect, widgets::Paragraph, Frame};
 
 pub struct HelpOverlay;
 
@@ -26,7 +23,9 @@ f   Filter (cycle or modal, lens-specific)
 g   Group-by cycle (Cost lens only)
 Tab Cycle focus across panels";
         f.render_widget(
-            Paragraph::new(body).block(Block::default().borders(Borders::ALL).title("Help")),
+            Paragraph::new(body)
+                .style(theme::body_style())
+                .block(theme::panel_block("Help")),
             area,
         );
     }

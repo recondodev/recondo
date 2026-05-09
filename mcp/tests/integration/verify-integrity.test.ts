@@ -1,7 +1,7 @@
 /**
  * D-C4-4 / D-C4-5 (integration) — End-to-end `recondo_verify_integrity`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed a small session + turns, then assert:
  *
  *   D-C4-4 — `recondo_verify_integrity` appears in `tools/list` with a

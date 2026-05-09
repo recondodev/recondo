@@ -10,10 +10,11 @@ default:
     @echo ""
     @echo "Testing"
     @echo "  just test             Gateway tests (no testcontainers; gated by fmt+clippy+lint-arch)"
-    @echo "  just test-all         Gateway tests + PG/S3 testcontainers (requires docker)"
-    @echo "  just verify           Alias for test (full definition-of-done)"
+    @echo "  just gateway-test-all Gateway tests + PG/S3 testcontainers (requires docker)"
+    @echo "  just test-all         Every repo test suite: gateway + xtask + TUI + data + API + dashboard + MCP"
+    @echo "  just verify           Alias for test-all (full definition-of-done)"
     @echo "  just ci               Same as test (CI gateway-only)"
-    @echo "  just ci-all           Same as test-all (CI with testcontainers)"
+    @echo "  just ci-all           Same as test-all (whole-repo CI with testcontainers)"
     @echo "  just ci-typescript    Full TS CI: data lint + version-check + build + tests + api tests"
     @echo ""
     @echo "Running the Gateway"
@@ -31,7 +32,7 @@ default:
     @echo "  just dev-run          Gateway with PostgreSQL + MiniStack S3 (prod-like)"
     @echo "  just dev-run-local    Gateway with PostgreSQL + local filesystem objects"
     @echo "  just dev-trace        Same as dev-run but with live trace output"
-    @echo "  just fullstack        Fully containerized: gateway + API + dashboard + PG + S3"
+    @echo "  just fullstack        Fully containerized: gateway + API + dashboard + MCP + PG + S3"
     @echo "  just fullstack-no-gw  Containerized API + dashboard + PG (run gateway yourself)"
     @echo "  just fullstack-down   Stops full stack (data preserved)"
     @echo "  just fullstack-reset  Stops full stack and wipes all data"
@@ -62,6 +63,7 @@ default:
     @echo "Dashboard (React frontend)"
     @echo "  just dashboard-setup  Install dashboard npm dependencies"
     @echo "  just dashboard-dev    Start dashboard dev server on :5173"
+    @echo "  just dashboard-test   Run dashboard tests"
     @echo ""
     @echo "TUI (Rust)"
     @echo "  just tui-build        Build the recondo-tui crate"
@@ -70,12 +72,12 @@ default:
     @echo ""
     @echo "@recondo/data Package"
     @echo "  just data-build       Build @recondo/data"
-    @echo "  just data-test        Run @recondo/data tests"
+    @echo "  just data-test        Run @recondo/data tests (uses Testcontainers if DATABASE_URL is unset)"
     @echo "  just data-test-types  Type-check @recondo/data tests (tsc --noEmit)"
     @echo "  just data-lint-arch   Architecture lint for @recondo/data (no transport imports)"
     @echo ""
     @echo "MCP Server (recondo-mcp)"
-    @echo "  just mcp-test         Build + run mcp tests (integration needs dev-infra+migrate)"
+    @echo "  just mcp-test         Build + run MCP tests (uses Testcontainers if DATABASE_URL is unset)"
     @echo "  just mcp-lint-parity  Catalog parity lint (Phase 1 stub until C11)"
     @echo ""
     @echo "Workspace Pipeline (pnpm)"
@@ -123,12 +125,23 @@ lint-arch:
 test: check lint-arch _build-xtask
     cd gateway && cargo nextest run --features test-support
 
-# Run EVERY test, including PG + S3 testcontainers. Same gates as
-# `just test`. Docker must be running and `cd api && npm ci` must
-# have been run once (the pg_container fixture shells out to
-# `npm run migrate`).
-test-all: check lint-arch _build-xtask
+# Run every gateway test, including PG + S3 testcontainers. Docker required.
+gateway-test-all: check lint-arch _build-xtask
     cd gateway && cargo nextest run --features test-support,postgres-tests,s3-tests
+
+# Runs every repo test suite. Docker required.
+test-all: gateway-test-all
+    cargo nextest run --package xtask --no-tests pass
+    cd tui && cargo nextest run
+    pnpm --filter @recondo/data run lint:arch
+    node scripts/version-check.mjs
+    pnpm --filter @recondo/data build
+    pnpm --filter @recondo/data run test:types
+    env -u DATABASE_URL pnpm --filter @recondo/data test
+    env -u DATABASE_URL -u TEST_DB_URL pnpm --filter recondo-api test
+    pnpm --filter recondo-dashboard test
+    pnpm --filter recondo-mcp build
+    env -u DATABASE_URL pnpm --filter recondo-mcp test
 
 # Aliases for the old recipe names. Each lists the same prerequisites
 # explicitly (rather than chaining through `test`/`test-all`) so the
@@ -137,11 +150,11 @@ test-all: check lint-arch _build-xtask
 ci: check lint-arch _build-xtask
     cd gateway && cargo nextest run --features test-support
 
-ci-all: check lint-arch _build-xtask
-    cd gateway && cargo nextest run --features test-support,postgres-tests,s3-tests
+# Alias for whole-repo test-all.
+ci-all: test-all
 
-# Full definition of done (alias for ci)
-verify: test
+# Full definition of done (alias for whole-repo test-all)
+verify: test-all
 
 # Build optimized release
 release: check
@@ -208,21 +221,23 @@ dev-infra-down:
 dev-infra-reset:
     docker compose -f docker-compose.dev.yml down -v
 
-# ---------- Fully containerized stack (gateway + PG + S3 in Docker) ----------
+# ---------- Fully containerized stack (gateway + MCP + PG + S3 in Docker) ----------
 
-# Build and start everything: gateway + API + dashboard + PostgreSQL + MiniStack S3
+# Build and start everything: gateway + API + dashboard + MCP + PostgreSQL + MiniStack S3
 fullstack:
     docker compose -f docker-compose.fullstack.yml up --build -d
+    @just dev-trust
     @echo ""
     @echo "Recondo full stack running:"
     @echo "  Dashboard:  http://localhost:3000"
     @echo "  API:        http://localhost:4000  (GraphQL)"
+    @echo "  MCP:        http://localhost:4001/mcp  (Streamable HTTP)"
     @echo "  Gateway:    localhost:8443         (HTTPS proxy)"
+    @echo "  Gateway CA: ~/.recondo/ca/ca.crt   (installed for host agents)"
     @echo "  PostgreSQL: localhost:5432"
     @echo "  MiniStack:  localhost:4566         (S3/KMS)"
     @echo ""
     @echo "Route agents through the gateway (additive trust — never disable TLS):"
-    @echo "  just dev-trust       # one-time: copy gateway CA to ~/.recondo/ca/ca.crt"
     @echo "  just cl              # launch Claude Code through the gateway"
     @echo "  just gemini          # launch Gemini CLI through the gateway"
     @echo "  CODEX_CA_CERTIFICATE=\$HOME/.recondo/ca/ca.crt HTTPS_PROXY=http://localhost:8443 codex"
@@ -253,7 +268,7 @@ fullstack-reset:
 
 # View full stack logs
 fullstack-logs:
-    docker compose -f docker-compose.fullstack.yml logs -f gateway
+    docker compose -f docker-compose.fullstack.yml logs -f
 
 # Terraform init + plan against MiniStack (the local AWS emulator).
 # TF_VAR_environment=local activates the endpoint overrides in provider.tf.
@@ -467,6 +482,10 @@ dashboard-setup:
 dashboard-dev:
     cd dashboard && pnpm run dev
 
+# Run dashboard tests
+dashboard-test:
+    pnpm --filter recondo-dashboard test
+
 
 # ---------- Cleanup ----------
 
@@ -538,7 +557,7 @@ ci-typescript-with-infra: dev-setup ws-install data-lint-arch check-versions dat
 
 # ---------- MCP Server (recondo-mcp) ----------
 
-# MCP test runner (unit + integration; integration requires `just dev-infra` + `just api-migrate`)
+# MCP test runner (unit + integration; starts Testcontainers Postgres if DATABASE_URL is unset)
 mcp-test:
     pnpm --filter recondo-mcp build
     pnpm --filter recondo-mcp test

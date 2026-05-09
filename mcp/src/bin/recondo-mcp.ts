@@ -2,13 +2,9 @@
 /**
  * recondo-mcp binary entrypoint.
  *
- * Parses flags + env, creates the MCP server, and connects the stdio
- * transport. Errors are written to stderr (logger) and the process
- * exits non-zero so a broken config never silently boots.
- *
- * The `config` subcommand path is C12's job; for C1, if `config`
- * appears in `remaining`, log a not-yet-implemented error and exit
- * non-zero rather than dispatching.
+ * Parses flags + env, then starts the long-running Streamable HTTP
+ * service. Errors are written to stderr (logger) and the process exits
+ * non-zero so a broken config never silently boots.
  */
 
 import { mintScopedKey } from "@recondo/data";
@@ -19,7 +15,16 @@ import {
   emitRegistrationJson,
   assertSupportedFlavor,
 } from "../config/registration.js";
-import { createMcpServer, connectStdio } from "../server.js";
+import { startHttpServer } from "../http.js";
+
+function parsePort(value: string | undefined): number {
+  const raw = value ?? "4001";
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65_535) {
+    throw new Error(`invalid MCP port: ${raw}`);
+  }
+  return parsed;
+}
 
 async function main(): Promise<void> {
   let flags;
@@ -31,9 +36,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // C12 — `recondo-mcp config <flavor>`. JSON emission is pure and
-  // DB-free; this is the ONLY place in the binary where stdout is a
-  // legitimate output channel (the SDK transport owns stdout otherwise).
+  // `recondo-mcp config <flavor>`. JSON emission is pure and DB-free
+  // unless --scoped is used to mint a bearer key. This is the only
+  // normal-mode stdout output; the service itself listens over HTTP.
   if (flags.remaining[0] === "config") {
     try {
       const flavorArg = flags.remaining[1];
@@ -83,19 +88,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let server;
   try {
-    server = await createMcpServer({ env, flags });
+    await startHttpServer({
+      env,
+      flags,
+      host: process.env.RECONDO_MCP_HOST ?? "127.0.0.1",
+      port: parsePort(process.env.RECONDO_MCP_PORT ?? process.env.PORT),
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ error: msg }, "failed to create mcp server");
-    process.exit(1);
-  }
-  try {
-    await connectStdio(server);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ error: msg }, "failed to connect stdio transport");
+    logger.error({ error: msg }, "failed to start mcp http service");
     process.exit(1);
   }
 }

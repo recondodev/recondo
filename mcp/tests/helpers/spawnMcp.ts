@@ -1,25 +1,16 @@
 /**
- * D-C2-1 — Reusable spawn helper for recondo-mcp integration tests.
+ * Reusable MCP integration helper.
  *
- * Spawns the built `dist/bin/recondo-mcp.js` binary, exchanges
- * line-delimited JSON-RPC over stdio, and exposes a `request()` /
- * `notify()` / `close()` surface so tests can drive `initialize`,
- * `tools/list`, `tools/call`, etc. without re-implementing the
- * JSON-RPC framing every time.
- *
- * Tests should `existsSync(BINARY)`-skip when the binary isn't built;
- * the helper itself does NOT skip — it errors loudly so a missing
- * build never silently passes.
+ * Starts the built `dist/bin/recondo-mcp.js` binary as a long-running
+ * Streamable HTTP service on an ephemeral localhost port, initializes an
+ * MCP session, and exposes `request()` / `notify()` / `close()` helpers.
  */
-import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Readable, Writable } from "node:stream";
 
-// ESM equivalent of CommonJS `__dirname`. The helper lives in an ESM
-// package (`"type": "module"`) so the legacy global is undefined at
-// runtime — derive it from `import.meta.url` instead.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const RECONDO_MCP_BINARY = resolve(
@@ -52,20 +43,111 @@ export interface SpawnMcpOptions {
    * exercise production-mode auth unless they explicitly request bypass.
    */
   devBypass?: boolean;
+  /** Bearer token sent on MCP HTTP requests. */
+  bearerToken?: string;
 }
 
 export interface SpawnedMcp {
   request<TResult = unknown>(method: string, params?: unknown): Promise<TResult>;
   notify(method: string, params?: unknown): void;
-  readonly child: ChildProcessByStdio<Writable, Readable, Readable>;
+  readonly child: ChildProcess;
   readonly stderr: string;
-  /** All raw stdout lines parsed so far (mostly for debugging). */
+  /** Kept for old assertions; HTTP-mode MCP must not write protocol to stdout. */
   readonly stdoutLines: ReadonlyArray<string>;
+  readonly baseUrl: string;
+  readonly sessionId: string | undefined;
   close(): Promise<void>;
 }
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const CLOSE_GRACE_MS = 2000;
+
+async function freePort(): Promise<number> {
+  return new Promise((resolveP, rejectP) => {
+    const server = createServer();
+    server.once("error", rejectP);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => rejectP(new Error("failed to allocate MCP port")));
+        return;
+      }
+      const { port } = address;
+      server.close(() => resolveP(port));
+    });
+  });
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolveP) => setTimeout(resolveP, ms));
+}
+
+async function waitForHealth(
+  baseUrl: string,
+  child: ChildProcess,
+  timeoutMs: number,
+  readStderr: () => string,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastErr: unknown;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `recondo-mcp exited before healthcheck; code=${child.exitCode} signal=${child.signalCode}; stderr=${readStderr()}`,
+      );
+    }
+    try {
+      const res = await fetch(`${baseUrl}/healthz`);
+      if (res.ok) return;
+      lastErr = new Error(`health status ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+    }
+    await sleep(100);
+  }
+  throw new Error(`timeout waiting for MCP healthcheck: ${String(lastErr)}`);
+}
+
+async function parseMcpResponse(
+  res: Response,
+): Promise<RpcMessage | undefined> {
+  if (res.status === 202) return undefined;
+  const body = await res.text();
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream")) {
+    for (const block of body.split(/\n\n+/)) {
+      const data = block
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice("data:".length).trimStart())
+        .join("\n");
+      if (!data) continue;
+      const parsed = JSON.parse(data) as RpcMessage;
+      if (parsed.id !== undefined) return parsed;
+    }
+    return undefined;
+  }
+  return JSON.parse(body) as RpcMessage;
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await promise;
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`timeout waiting for ${label}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function spawnMcp(
   options: SpawnMcpOptions = {},
@@ -97,55 +179,34 @@ export async function spawnMcp(
   }
   Object.assign(baseEnv, options.env ?? {});
 
+  const port = await freePort();
+  baseEnv.RECONDO_MCP_HOST = "127.0.0.1";
+  baseEnv.RECONDO_MCP_PORT = String(port);
+  const baseUrl = `http://127.0.0.1:${port}`;
+
   const child = spawn(process.execPath, [RECONDO_MCP_BINARY, ...(options.args ?? [])], {
     env: baseEnv,
-    stdio: ["pipe", "pipe", "pipe"],
-  }) as ChildProcessByStdio<Writable, Readable, Readable>;
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const stdoutLines: string[] = [];
+  let stdoutBuf = "";
   let stderrBuf = "";
   let nextId = 1;
+  let sessionId: string | undefined;
 
-  type Pending = {
-    resolve: (msg: RpcMessage) => void;
-    reject: (err: Error) => void;
-    timer: NodeJS.Timeout;
-  };
-  const pending = new Map<number | string, Pending>();
-  let stdoutBuf = "";
-
-  child.stdout.on("data", (chunk: Buffer) => {
+  child.stdout?.on("data", (chunk: Buffer) => {
     stdoutBuf += chunk.toString("utf8");
     let nl: number;
     while ((nl = stdoutBuf.indexOf("\n")) !== -1) {
       const line = stdoutBuf.slice(0, nl);
       stdoutBuf = stdoutBuf.slice(nl + 1);
-      if (line.trim().length === 0) continue;
-      stdoutLines.push(line);
-      let parsed: RpcMessage | undefined;
-      try {
-        parsed = JSON.parse(line) as RpcMessage;
-      } catch {
-        // Reject any pending requests; non-JSON on stdout is a fatal
-        // contract violation (no log bleed).
-        for (const [id, p] of pending) {
-          clearTimeout(p.timer);
-          p.reject(new Error(`stdout non-JSON: ${line.slice(0, 200)}`));
-          pending.delete(id);
-        }
-        continue;
-      }
-      if (parsed && parsed.id !== undefined && pending.has(parsed.id)) {
-        const p = pending.get(parsed.id)!;
-        clearTimeout(p.timer);
-        pending.delete(parsed.id);
-        p.resolve(parsed);
-      }
+      if (line.trim().length > 0) stdoutLines.push(line);
     }
   });
 
-  child.stderr.on("data", (chunk: Buffer) => {
+  child.stderr?.on("data", (chunk: Buffer) => {
     stderrBuf += chunk.toString("utf8");
   });
 
@@ -154,19 +215,45 @@ export async function spawnMcp(
       child.once("close", (code, signal) => resolveExit({ code, signal }));
     },
   );
-  // Surface premature exit by rejecting any pending requests.
-  void exitPromise.then(({ code }) => {
-    for (const [id, p] of pending) {
-      clearTimeout(p.timer);
-      p.reject(
-        new Error(`recondo-mcp exited (code=${code}) with pending requests; stderr=${stderrBuf}`),
-      );
-      pending.delete(id);
-    }
-  });
 
-  function sendRaw(msg: RpcMessage): void {
-    child.stdin.write(JSON.stringify(msg) + "\n");
+  async function post(
+    message: RpcMessage,
+    includeSession: boolean,
+  ): Promise<{ message?: RpcMessage; sessionId?: string }> {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    };
+    if (options.bearerToken) {
+      headers.authorization = `Bearer ${options.bearerToken}`;
+    }
+    if (includeSession) {
+      if (!sessionId) throw new Error("MCP session is not initialized");
+      headers["MCP-Session-Id"] = sessionId;
+      headers["MCP-Protocol-Version"] = "2025-11-25";
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(message),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status >= 400) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} for ${message.method}: ${body}`);
+    }
+    return {
+      message: await parseMcpResponse(res),
+      sessionId: res.headers.get("mcp-session-id") ?? undefined,
+    };
   }
 
   async function request<TResult = unknown>(
@@ -174,33 +261,36 @@ export async function spawnMcp(
     params?: unknown,
   ): Promise<TResult> {
     const id = nextId++;
-    return new Promise<TResult>((resolveP, rejectP) => {
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        rejectP(new Error(`timeout waiting for ${method} (id=${id})`));
-      }, timeoutMs);
-      pending.set(id, {
-        resolve: (msg) => {
-          if (msg.error) {
-            rejectP(
-              new Error(
-                `JSON-RPC error for ${method}: ${msg.error.code} ${msg.error.message}`,
-              ),
-            );
-            return;
-          }
-          resolveP(msg.result as TResult);
-        },
-        reject: rejectP,
-        timer,
-      });
-      const params2 = params === undefined ? {} : params;
-      sendRaw({ jsonrpc: "2.0", id, method, params: params2 });
-    });
+    const result = await post(
+      {
+        jsonrpc: "2.0",
+        id,
+        method,
+        params: params === undefined ? {} : params,
+      },
+      true,
+    );
+    const msg = result.message;
+    if (!msg) {
+      throw new Error(`empty MCP response for ${method}`);
+    }
+    if (msg.error) {
+      throw new Error(
+        `JSON-RPC error for ${method}: ${msg.error.code} ${msg.error.message}`,
+      );
+    }
+    return msg.result as TResult;
   }
 
   function notify(method: string, params?: unknown): void {
-    sendRaw({ jsonrpc: "2.0", method, params });
+    void post(
+      {
+        jsonrpc: "2.0",
+        method,
+        params: params === undefined ? {} : params,
+      },
+      true,
+    );
   }
 
   async function close(): Promise<void> {
@@ -218,17 +308,44 @@ export async function spawnMcp(
     }
   }
 
-  // Run the handshake unless the caller opts out.
   if (options.initialize !== false) {
-    await request("initialize", {
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      clientInfo: options.clientInfo ?? { name: "vitest", version: "0.0.0" },
-    });
-    // Per MCP spec, the client should send `notifications/initialized`
-    // after the handshake response. The SDK is forgiving about this in
-    // tests, but it costs nothing to do it correctly.
-    notify("notifications/initialized");
+    await waitForHealth(baseUrl, child, timeoutMs, () => stderrBuf);
+    const init = await withTimeout(
+      post(
+        {
+          jsonrpc: "2.0",
+          id: nextId++,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-11-25",
+            capabilities: {},
+            clientInfo: options.clientInfo ?? { name: "vitest", version: "0.0.0" },
+          },
+        },
+        false,
+      ),
+      timeoutMs,
+      "initialize",
+    );
+    sessionId = init.sessionId;
+    if (!sessionId) {
+      await close();
+      throw new Error(`initialize response did not include MCP-Session-Id`);
+    }
+    if (init.message?.error) {
+      await close();
+      throw new Error(
+        `JSON-RPC error for initialize: ${init.message.error.code} ${init.message.error.message}`,
+      );
+    }
+    await post(
+      {
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {},
+      },
+      true,
+    );
   }
 
   return {
@@ -240,6 +357,12 @@ export async function spawnMcp(
     },
     get stdoutLines() {
       return stdoutLines;
+    },
+    get baseUrl() {
+      return baseUrl;
+    },
+    get sessionId() {
+      return sessionId;
     },
     close,
   };

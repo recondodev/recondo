@@ -140,9 +140,12 @@ export type {
   ToolCallPeriod,
 } from "./tool-call-stats.js";
 
-// Object store (local driver). Future drivers (S3) will land alongside.
-export { LocalObjectStore } from "./object-store/local.js";
-export type { LocalObjectStoreOpts } from "./object-store/local.js";
+// Object stores shared by API/MCP consumers.
+export { LocalObjectStore, S3ObjectStore } from "./object-store/index.js";
+export type {
+  LocalObjectStoreOpts,
+  S3ObjectStoreOpts,
+} from "./object-store/index.js";
 
 // Anomalies: list with project scoping + since-cursor support.
 export { listAnomalies } from "./anomalies.js";

@@ -1,7 +1,7 @@
 /**
  * D-C2-3 / D-C2-4 / D-C2-5 — End-to-end `recondo_list_sessions`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * and assert the tool:
  *
  *   D-C2-3 — appears in `tools/list` with the canonical schema

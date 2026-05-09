@@ -1,11 +1,12 @@
 use crate::app::selection::{GroupKey, SelectionRegistry};
 use crate::format::format_cost;
 use crate::search::fuzzy::fuzzy_match;
+use crate::ui::theme;
 use crate::ui::widgets::sparkline::DailySpark;
 use crate::ui::widgets::table::VirtTable;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -207,7 +208,9 @@ impl CostLens {
             self.group
         );
         f.render_widget(
-            Paragraph::new(title).block(Block::default().borders(Borders::ALL).title("Cost")),
+            Paragraph::new(title)
+                .style(theme::body_style())
+                .block(theme::panel_block("Cost")),
             chunks[0],
         );
 

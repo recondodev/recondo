@@ -1,7 +1,7 @@
 /**
  * D-C5-4 (integration) — End-to-end `recondo_session_efficiency`.
  *
- * Spawn the binary, drive it via line-delimited JSON-RPC over stdio,
+ * Spawn the binary, drive it over Streamable HTTP,
  * seed a session with multiple turns, then assert the tool returns a
  * structured efficiency record with the canonical fields:
  *
