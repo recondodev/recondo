@@ -1,4 +1,4 @@
-import { getPool } from "./db.js";
+import { getPool } from "@recondo/data";
 
 export interface AuditEntry {
   apiKeyId: string;

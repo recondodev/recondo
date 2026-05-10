@@ -19,12 +19,8 @@
  * All scores are in [0, 1]. Severity: "critical" if score >= 0.7, otherwise "warning".
  */
 
-import { getPool } from "../db.js";
+import { getPool, maskPlaceholderPaths, sanitizeAnomalyRow } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
-import {
-  maskPlaceholderPaths,
-  sanitizeAnomalyRow,
-} from "../placeholder-mask.js";
 
 // ---------------------------------------------------------------------------
 // Anomaly type definitions

@@ -103,14 +103,14 @@ const GENERATE_REPORT_MUTATION = `
 `;
 
 // ---------------------------------------------------------------------------
-// Framework options for generate form
+// Report type options for generate form
 // ---------------------------------------------------------------------------
 
-const FRAMEWORK_OPTIONS = [
-  "SOC 2",
-  "ISO 42001",
-  "EU AI Act",
-  "NIST AI RMF",
+const REPORT_TYPE_OPTIONS = [
+  { label: "Weekly Cost", value: "WEEKLY_COST" },
+  { label: "Compliance", value: "COMPLIANCE" },
+  { label: "Anomaly", value: "ANOMALY" },
+  { label: "Custom", value: "CUSTOM" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -262,7 +262,7 @@ function DownloadButton({ reportId }: { reportId: string }) {
 export default function AuditReports() {
   const queryClient = useQueryClient();
   const [showGenerateForm, setShowGenerateForm] = useState(false);
-  const [genFramework, setGenFramework] = useState(FRAMEWORK_OPTIONS[0]);
+  const [genReportType, setGenReportType] = useState(REPORT_TYPE_OPTIONS[0].value);
   const [genStartDate, setGenStartDate] = useState("");
   const [genEndDate, setGenEndDate] = useState("");
 
@@ -312,10 +312,22 @@ export default function AuditReports() {
 
   // Generate report mutation
   const generateMutation = useMutation({
-    mutationFn: async (vars: { framework: string; periodStart: string; periodEnd: string }) => {
+    mutationFn: async (vars: {
+      type: string;
+      period: "WEEK" | "MONTH";
+      from?: string;
+      to?: string;
+    }) => {
       const raw = await graphqlRequest<Record<string, unknown>>(
         GENERATE_REPORT_MUTATION,
-        { input: { framework: vars.framework, periodStart: vars.periodStart, periodEnd: vars.periodEnd } },
+        {
+          input: {
+            type: vars.type,
+            period: vars.period,
+            from: vars.from,
+            to: vars.to,
+          },
+        },
         "GenerateReport",
       );
       return extractField<unknown>(raw, "generateReport");
@@ -332,11 +344,12 @@ export default function AuditReports() {
 
   const handleGenerate = useCallback(() => {
     generateMutation.mutate({
-      framework: genFramework,
-      periodStart: genStartDate || new Date().toISOString(),
-      periodEnd: genEndDate || new Date().toISOString(),
+      type: genReportType,
+      period: "WEEK",
+      from: genStartDate || undefined,
+      to: genEndDate || undefined,
     });
-  }, [generateMutation, genFramework, genStartDate, genEndDate]);
+  }, [generateMutation, genReportType, genStartDate, genEndDate]);
 
   // ---------------------------------------------------------------------------
   // Loading / Error
@@ -410,17 +423,17 @@ export default function AuditReports() {
           <h3>Generate New Report</h3>
 
           <label htmlFor="gen-framework" style={{ display: "block", marginTop: "8px" }}>
-            Framework
+            Report Type
           </label>
           <select
             id="gen-framework"
-            value={genFramework}
-            onChange={(e) => setGenFramework(e.target.value)}
-            aria-label="Framework"
+            value={genReportType}
+            onChange={(e) => setGenReportType(e.target.value)}
+            aria-label="Report Type"
           >
-            {FRAMEWORK_OPTIONS.map((fw) => (
-              <option key={fw} value={fw}>
-                {fw}
+            {REPORT_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>

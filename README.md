@@ -6,11 +6,23 @@
 
 **The visibility and control layer for coding-agent traffic.**
 
-On-prem gateway. Multi-vendor. Zero touch.
+Self-hosted. Multi-vendor. Zero touch.
+
+Run on-prem or in your own cloud account (AWS Terraform module included).
 
 Recondo sits on the network path between coding agents (Claude Code, Codex, Cursor, Aider, Gemini-based agents) and their LLM providers. Every request and response flows through it — visible in one place, controllable at the wire. Cap spend per team, redact secrets before they leave the network, route or block by provider, model, or developer.
 
 Under the hood, it's a transparent TLS-intercepting proxy: traffic is captured, hashed, compressed, and stored in a content-addressable object store, then structured into sessions, turns, and tool calls. No SDKs, no instrumentation, no developer workflow change.
+
+## Demo
+
+### TUI: cross-tool god-view (60s)
+
+<!-- video: docs/site/demos/assets/tui-60s.mp4 -->
+
+### MCP: your agents introspect their own history (30s)
+
+<!-- video: docs/site/demos/assets/mcp-30s.mp4 -->
 
 ## Why Teams Run It
 

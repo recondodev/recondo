@@ -6,7 +6,7 @@
  * Does NOT block the immutable capture write pipeline.
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 
 interface ViewSchedule {
   viewName: string;

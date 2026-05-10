@@ -1,5 +1,5 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
-import { MappedSession, MappedTurn, MappedToolCall, MappedAnomaly, MappedUserTurn, MappedAttachment } from '../resolvers/mappers.js';
+import { MappedSession, MappedTurn, MappedToolCall, MappedAnomaly, MappedUserTurn, MappedAttachment } from '@recondo/data';
 import { GqlContext } from '../context.js';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
@@ -18,6 +18,7 @@ export type Scalars = {
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   DateTime: { input: any; output: any; }
+  JSON: { input: any; output: any; }
 };
 
 /** D5.1: Agent analytics summary. */
@@ -263,9 +264,11 @@ export type GatewayStatus = {
 
 /** D6.1: Input for generating a report. */
 export type GenerateReportInput = {
-  framework: Scalars['String']['input'];
-  periodEnd: Scalars['DateTime']['input'];
-  periodStart: Scalars['DateTime']['input'];
+  from?: InputMaybe<Scalars['DateTime']['input']>;
+  params?: InputMaybe<Scalars['JSON']['input']>;
+  period: GenerateReportPeriod;
+  to?: InputMaybe<Scalars['DateTime']['input']>;
+  type: GenerateReportType;
 };
 
 /** D6.1: Payload returned from generateReport mutation. */
@@ -274,6 +277,20 @@ export type GenerateReportPayload = {
   errors: Array<MutationError>;
   report?: Maybe<Report>;
 };
+
+/** D6.1: Persisted report generator period. */
+export enum GenerateReportPeriod {
+  Month = 'MONTH',
+  Week = 'WEEK'
+}
+
+/** D6.1: Persisted report generator type. */
+export enum GenerateReportType {
+  Anomaly = 'ANOMALY',
+  Compliance = 'COMPLIANCE',
+  Custom = 'CUSTOM',
+  WeeklyCost = 'WEEKLY_COST'
+}
 
 export type IntegrityReport = {
   __typename?: 'IntegrityReport';
@@ -1046,10 +1063,13 @@ export type ResolversTypes = ResolversObject<{
   GatewayStatus: ResolverTypeWrapper<GatewayStatus>;
   GenerateReportInput: GenerateReportInput;
   GenerateReportPayload: ResolverTypeWrapper<GenerateReportPayload>;
+  GenerateReportPeriod: GenerateReportPeriod;
+  GenerateReportType: GenerateReportType;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   IntegrityReport: ResolverTypeWrapper<IntegrityReport>;
   IntegrityStatus: IntegrityStatus;
+  JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KeyConnection: ResolverTypeWrapper<KeyConnection>;
   KeyStatus: KeyStatus;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -1117,6 +1137,7 @@ export type ResolversParentTypes = ResolversObject<{
   ID: Scalars['ID']['output'];
   Int: Scalars['Int']['output'];
   IntegrityReport: IntegrityReport;
+  JSON: Scalars['JSON']['output'];
   KeyConnection: KeyConnection;
   Mutation: Record<PropertyKey, never>;
   MutationError: MutationError;
@@ -1331,6 +1352,10 @@ export type IntegrityReportResolvers<ContextType = GqlContext, ParentType extend
   verified?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   verifiedTurns?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 }>;
+
+export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['JSON'], any> {
+  name: 'JSON';
+}
 
 export type KeyConnectionResolvers<ContextType = GqlContext, ParentType extends ResolversParentTypes['KeyConnection'] = ResolversParentTypes['KeyConnection']> = ResolversObject<{
   items?: Resolver<Array<ResolversTypes['RegisteredKey']>, ParentType, ContextType>;
@@ -1652,6 +1677,7 @@ export type Resolvers<ContextType = GqlContext> = ResolversObject<{
   GatewayStatus?: GatewayStatusResolvers<ContextType>;
   GenerateReportPayload?: GenerateReportPayloadResolvers<ContextType>;
   IntegrityReport?: IntegrityReportResolvers<ContextType>;
+  JSON?: GraphQLScalarType;
   KeyConnection?: KeyConnectionResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   MutationError?: MutationErrorResolvers<ContextType>;

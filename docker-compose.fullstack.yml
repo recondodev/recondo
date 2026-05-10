@@ -1,4 +1,4 @@
-# Full-stack Recondo: gateway + API + dashboard + PostgreSQL + MiniStack S3
+# Full-stack Recondo: gateway + API + dashboard + MCP + PostgreSQL + MiniStack S3
 # Everything runs in Docker.
 #
 # Usage:
@@ -10,6 +10,7 @@
 #   Gateway:    localhost:8443  (HTTPS proxy — route agents here)
 #   API:        localhost:4000  (GraphQL API)
 #   Dashboard:  localhost:3000  (React frontend)
+#   MCP:        localhost:4001  (Streamable HTTP at /mcp)
 #   PostgreSQL: localhost:5432  (database)
 #   MiniStack:  localhost:4566  (S3/KMS emulation)
 
@@ -65,7 +66,7 @@ services:
       dockerfile: Dockerfile.api
     environment:
       DATABASE_URL: "postgres://recondo:recondo_dev@postgres:5432/recondo"
-    command: ["sh", "-c", "npm run migrate up"]
+    command: ["sh", "-c", "pnpm run migrate up"]
     restart: "no"
     depends_on:
       postgres:
@@ -125,8 +126,46 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ministack-init:
+        condition: service_completed_successfully
       migrations:
         condition: service_completed_successfully
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "4001:4001"
+    environment:
+      DATABASE_URL: "postgres://recondo:recondo_dev@postgres:5432/recondo"
+      PORT: "4001"
+      NODE_ENV: development
+      RECONDO_DEV_BYPASS: "1"
+      RECONDO_MCP_HOST: "0.0.0.0"
+      RECONDO_MCP_PORT: "4001"
+      RECONDO_OBJECTS: s3
+      RECONDO_S3_BUCKET: recondo-objects-dev
+      AWS_ENDPOINT_URL: http://ministack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ministack-init:
+        condition: service_completed_successfully
+      migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   dashboard:
     build:
@@ -138,6 +177,7 @@ services:
       - "3000:80"
     depends_on:
       - api
+      - mcp
 
 volumes:
   postgres_data:

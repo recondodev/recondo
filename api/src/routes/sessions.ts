@@ -13,13 +13,8 @@
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod/v4";
-import { getPool } from "../db.js";
+import { getPool, sanitizeRowTextFields, SESSION_TEXT_FIELDS, TURN_TEXT_FIELDS } from "@recondo/data";
 import { handleRestEndpoint } from "../middleware/rest-helpers.js";
-import {
-  sanitizeRowTextFields,
-  SESSION_TEXT_FIELDS,
-  TURN_TEXT_FIELDS,
-} from "../placeholder-mask.js";
 
 // D0.6: Zod schemas for input validation
 

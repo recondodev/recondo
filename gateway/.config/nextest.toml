@@ -1,3 +1,12 @@
+# Kill tests that hang. nextest's default slow-timeout is 60s with no
+# terminate-after, so a stuck test (e.g. an AWS SDK call against a
+# wedged ministack container with no client-side read timeout) runs
+# until the GH Actions 6-hour job timeout. Capping at 5 SLOW markers
+# (60s × 5 = 5 min) bounds blast radius without flagging healthy tests
+# — the slowest legitimate tests here finish in ~5-7 s.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 5 }
+
 # Cap how many test binaries can spawn docker containers in parallel.
 #
 # Each PG/S3 integration binary spawns its own testcontainer via

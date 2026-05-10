@@ -510,6 +510,62 @@ describe("search query", () => {
 });
 
 // =========================================================================
+// search query — input validation (D-S13)
+// =========================================================================
+
+describe("search query — input validation (D-S13)", () => {
+  it("returns GraphQLError with extensions.code BAD_USER_INPUT when search query exceeds 500 chars", async () => {
+    const longQuery = "x".repeat(501);
+    const { body, response } = await graphql({
+      apiKey: API_KEYS.alpha,
+      query: `
+        query($query: String!, $projectId: ID!) {
+          search(query: $query, projectId: $projectId) {
+            id
+          }
+        }
+      `,
+      variables: { query: longQuery, projectId: IDS.projectAlpha },
+    });
+
+    // GraphQL returns 200 even for application errors
+    expect(response.status).toBe(200);
+    expect(body.errors).toBeDefined();
+    expect(body.errors!.length).toBeGreaterThan(0);
+
+    const err = body.errors![0]!;
+    expect(err.extensions?.code).toBe("BAD_USER_INPUT");
+    expect(err.message).toMatch(/search query too long/i);
+
+    // Phantom-wiring guard: the package-internal error class name must NOT
+    // leak into the response. Operators should see the converted GraphQLError,
+    // not the @recondo/data internal type.
+    const responseText = JSON.stringify(body);
+    expect(responseText).not.toMatch(/DataValidationError/);
+  });
+
+  it("accepts search query exactly at 500 chars", async () => {
+    const okQuery = "x".repeat(500);
+    const { body, response } = await graphql({
+      apiKey: API_KEYS.alpha,
+      query: `
+        query($query: String!, $projectId: ID!) {
+          search(query: $query, projectId: $projectId) {
+            id
+          }
+        }
+      `,
+      variables: { query: okQuery, projectId: IDS.projectAlpha },
+    });
+
+    expect(response.status).toBe(200);
+    expect(body.errors).toBeUndefined();
+    // Empty results are fine; we're testing that 500 chars doesn't throw.
+    expect(Array.isArray(body.data?.search)).toBe(true);
+  });
+});
+
+// =========================================================================
 // verifyIntegrity query
 // =========================================================================
 

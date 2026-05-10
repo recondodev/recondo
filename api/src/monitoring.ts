@@ -6,7 +6,7 @@
  * POST /v1/monitoring/alerts/configure — webhook alert configuration
  */
 
-import { getPool } from "./db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "./context.js";
 
 // MISSING fix: Fire-and-forget alert evaluation helper, used as side effect

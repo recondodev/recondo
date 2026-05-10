@@ -11,7 +11,7 @@
  * - riskDistribution: { low, medium, high, critical }
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 import { classifyRiskLevel } from "../risk/classification.js";
 

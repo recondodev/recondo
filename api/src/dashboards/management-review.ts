@@ -13,10 +13,9 @@
  * Authenticated access required.
  */
 
-import { getPool } from "../db.js";
+import { getPool, maskPlaceholderPaths } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 import { classifyRiskLevel } from "../risk/classification.js";
-import { maskPlaceholderPaths } from "../placeholder-mask.js";
 
 interface ManagementReviewQuery {
   projectId?: string;

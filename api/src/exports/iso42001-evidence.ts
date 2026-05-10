@@ -12,9 +12,8 @@
  * - Cl.10:  Continual Improvement
  */
 
-import { getPool } from "../db.js";
+import { getPool, maskPlaceholderPaths } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
-import { maskPlaceholderPaths } from "../placeholder-mask.js";
 
 export async function handleIso42001Evidence(
   body: Record<string, unknown>,

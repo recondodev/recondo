@@ -1,0 +1,27 @@
+{
+  "name": "recondo-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "recondo-mcp": "dist/bin/recondo-mcp.js" },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@recondo/data": "workspace:*",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.14.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0",
+    "testcontainers": "^11.14.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}

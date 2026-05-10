@@ -8,7 +8,7 @@
  * - GET /v1/usage/tool-analytics  — tool call frequency, success rate, avg latency per tool
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 /**

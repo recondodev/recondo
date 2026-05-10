@@ -59,11 +59,11 @@ Gateway (Rust) ──writes──> PostgreSQL ◄── reads ──┐
                 │  api/  service    │          │  mcp/ service│
                 │  (Node process)   │          │  (Node proc) │
                 │                   │          │              │
-                │  GraphQL @ /graphql│         │  stdio MCP   │
-                │  REST   @ /v1/*   │          │  (per agent) │
+                │  GraphQL @ /graphql│         │ HTTP MCP @   │
+                │  REST   @ /v1/*   │          │ /mcp         │
                 └─────┬─────────────┘          └──────┬───────┘
                       ▲                                ▲
-                      │ HTTP (GraphQL)                 │ stdio
+                      │ HTTP (GraphQL)                 │ Streamable HTTP
                       │                                │
               Dashboard + TUI                      Agents
               (GraphQL clients)                    (Claude Code,
@@ -271,51 +271,50 @@ packages/
 
 `api/` and `mcp/` are sibling services. Each is independently runnable, deployable, versionable. Each owns its own transport concerns, its own auth header parsing, its own server lifecycle. Both depend on the `recondo-data` library; neither depends on the other.
 
-The `mcp/` service owns MCP-specific concerns and nothing else: the `@modelcontextprotocol/sdk` server, tool registration, argument shape translation, and the stdio transport. It imports data operations and types from `recondo-data`. It does not import anything from `api/`.
+The `mcp/` service owns MCP-specific concerns and nothing else: the `@modelcontextprotocol/sdk` server, tool registration, argument shape translation, and the Streamable HTTP transport. It imports data operations and types from `recondo-data`. It does not import anything from `api/`.
 
-Default transport: stdio (the standard MCP install path — agent clients spawn `recondo-mcp` as a subprocess per session). HTTP/SSE or local socket transports are deferred to v1.5.
+Default and only product transport: Streamable HTTP at `/mcp`. The process is a long-running service, binds `RECONDO_MCP_HOST` / `RECONDO_MCP_PORT`, and is deployed alongside the API in the fullstack environment. There is no local-spawn MCP transport in the product path.
 
-The MCP is invoked by the agent as a subprocess; it is not a long-running daemon in v1. There is no `just mcp-dev` recipe because there is nothing to start in the dev environment — the MCP runs on demand when an agent connects to it. For development testing there's `just mcp-test`, which runs the integration suite by spawning the binary against a test DB and a mock MCP client.
+The MCP is not invoked by agents as a subprocess. Agents connect to a remote service URL, typically `http://localhost:4001/mcp` in local fullstack. `just fullstack` starts the MCP service with the rest of the stack; `just mcp-test` runs the integration suite by launching the service on an ephemeral local port and driving the Streamable HTTP endpoint.
 
 ### Auth model — MCP
 
 Same posture as the TUI: ease of use first, real auth available when you want it. Symmetric across all transports — each one acquires an `ApiKeyInfo` its own way and hands it to the data-layer package, which scopes everything from there. The data-layer package is the only thing that needs to understand `ApiKeyInfo`; the transports do not share auth code.
 
 **Default (no auth setup required):**
-- Agent registers Recondo's MCP server with no `RECONDO_API_KEY` in the env block.
-- MCP server starts, sees no key, applies a dev-mode posture: synthesizes an admin `ApiKeyInfo` (`projectId: null`) and uses it for every data-layer call.
-- Gated on `RECONDO_DEV_BYPASS=1` env (or, for v1 simplicity, also accepts `NODE_ENV=development` to match the API's current behavior). In a deployed/non-dev process the MCP refuses to start without a key.
+- Local fullstack starts the MCP service with `RECONDO_DEV_BYPASS=1` and no external client credentials.
+- MCP server starts, sees dev-bypass, applies a dev-mode posture: synthesizes an admin `ApiKeyInfo` (`projectId: null`) and uses it for every data-layer call.
+- Gated on `RECONDO_DEV_BYPASS=1` with `NODE_ENV=development`. In a deployed/non-dev process the MCP service still starts, but unauthenticated requests are rejected unless the client sends a bearer key.
 - Effective scope: full historical, cross-project. God-mode by default for local single-user installs.
 
 **Opt-in (for scoped or production use):**
-- Agent registers with `RECONDO_API_KEY` in the launch env:
+- Agent registers with a bearer key for the remote MCP service:
   ```json
   {
     "mcpServers": {
       "recondo": {
-        "command": "recondo-mcp",
-        "env": {
-          "DATABASE_URL": "postgres://recondo:recondo_dev@localhost:5432/recondo",
-          "RECONDO_API_KEY": "wrt_..."
+        "type": "streamable-http",
+        "url": "https://recondo.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer wrt_..."
         }
       }
     }
   }
   ```
 - MCP server validates the key by calling the data-layer package's `authenticateApiKey(token)` function (same hashing, same `api_keys` lookup as the API uses). Constructs an `ApiKeyInfo`.
-- Caches it for the process lifetime — stdio sessions are short-lived (one process per agent connection), so per-request re-validation is wasteful.
-- If the key is malformed, revoked, or unknown: server refuses to start with a structured error the agent surfaces to the user. No silent fallback.
+- Resolves auth per MCP session/request. If the key is malformed, revoked, or unknown, the server returns a structured MCP/HTTP error. No silent fallback.
 
 **Configuration the MCP needs at startup (always):**
 - `DATABASE_URL` — Postgres connection. Required; MCP cannot function without DB access.
-- `RECONDO_OBJECT_STORE_PATH` (or equivalent S3 config) — for `recondo_get_turn_raw_metadata` / `recondo_get_turn_raw_chunk` byte fetches. Required.
-- `RECONDO_API_KEY` — optional, opt-in for real auth.
+- `RECONDO_OBJECT_STORE_PATH` for local object storage, or `RECONDO_OBJECTS=s3` + `RECONDO_S3_BUCKET` + normal AWS endpoint/credential env for S3-compatible storage.
+- `RECONDO_MCP_HOST` / `RECONDO_MCP_PORT` — bind address and service port. Local fullstack uses `0.0.0.0:4001` inside Docker, exposed as `http://localhost:4001/mcp`.
 - `RECONDO_DEV_BYPASS` / `NODE_ENV` — optional, controls the no-key dev posture above.
 
 **Helper command:**
-- `recondo-mcp config` (subcommand on the MCP binary) emits a JSON registration snippet for Claude Code / Cursor / Goose. By default it includes `DATABASE_URL` and other infra env vars derived from the running environment; omits `RECONDO_API_KEY`. With `--scoped <project_id>` it mints a scoped key and includes it.
+- `recondo-mcp config <flavor>` emits a remote Streamable HTTP registration snippet for Claude Code / Cursor / Goose. By default it points at `RECONDO_MCP_URL` or `http://localhost:${RECONDO_MCP_PORT:-4001}/mcp` and omits credentials. With `--scoped <project_id>` it mints a scoped key and emits it as an `Authorization: Bearer ...` header.
 
-**Why this is symmetric, not coupled:** GraphQL transports auth via the `Authorization` header on each HTTP call. MCP transports auth via an env var on process spawn. REST `/v1/query` uses the same header pattern as GraphQL. Three different transport mechanisms, all converging on the same `ApiKeyInfo` shape that the data-layer package accepts. The transports do not share auth code, middleware, or processes — each implements its own way to acquire a key — they share only the data-layer's notion of "what an authenticated context looks like." The MCP and API can be running independently, can be at different versions of the data-layer package (in principle; in practice we keep them in lockstep — see Risks).
+**Why this is symmetric, not coupled:** GraphQL, REST, and MCP all transport auth via HTTP headers and converge on the same `ApiKeyInfo` shape that the data-layer package accepts. The transports do not share auth middleware or processes — each implements its own way to acquire a key — they share only the data-layer's notion of "what an authenticated context looks like." The MCP and API can be running independently, can be at different versions of the data-layer package (in principle; in practice we keep them in lockstep — see Risks).
 
 **Multi-user / scoped-key deployments** — where different agents get different `project_id` scopes — are out of scope for v1. The seam exists: pass a non-admin key in env; the data layer scopes everything via `ctx.apiKey.projectId` automatically. No MCP-side change needed when v2 lights this up.
 
@@ -480,7 +479,7 @@ loop:
 
 **Cadence guidance is different for agents than for the dashboard.** A 5s loop in an agent context burns ~720 tool calls/hour, each one consuming context-window budget on the response. The `monitor_anomalies` prompt template (below) recommends 30–60s for non-urgent monitoring; agents that need urgent (sub-30s) freshness should be making the case explicitly to the user, not defaulting to it.
 
-Server-driven push (MCP resource subscriptions / notifications over a persistent transport) is deferred to v1.5 — Claude Code's MCP client supports `notifications/resources/updated` only over HTTP/SSE transport, not stdio (where most v1 deployments will run); Cursor's support is partial; Goose is best. Stdio + agent-driven polling is the lowest common denominator that works everywhere in v1.
+Server-driven push (MCP resource subscriptions / notifications over a persistent transport) is deferred until there is a concrete agent workflow that needs it. The transport is already persistent-capable via Streamable HTTP; v1 uses request/response tools plus agent-driven polling because that is the simplest client behavior to reason about.
 
 ### Streaming preparation — architectural commitments now, capability lights up later
 
@@ -599,7 +598,7 @@ There is no `--scope-time` flag. Time is always per-query.
 ### Testing
 
 - **Unit:** each MCP tool is a thin adapter over a `recondo-data` function; test the adapter (input shape translation, error envelope, response truncation, projection defaults, captured-content envelope wrapping). Data-layer functions have their own tests inside the `recondo-data` package.
-- **Integration:** spawn the `recondo-mcp` binary against a test DB with a seeded admin key in env; issue tool calls via the MCP TS SDK's test harness; assert response shape, role-explicit message envelopes, `<captured_*>` delimiters present on returned prompt/response text, and that the auth context flowed through correctly (a non-admin key produces scoped results).
+- **Integration:** start the `recondo-mcp` service on an ephemeral local HTTP port against a test DB; issue tool calls over Streamable HTTP; assert response shape, role-explicit message envelopes, `<captured_*>` delimiters present on returned prompt/response text, and that the auth context flowed through correctly (a non-admin key produces scoped results).
 - **Injection-defense tests:** seed captures whose user-message content contains injection-style strings (`ignore previous instructions`, `system: ...`, fake `</captured_*>` close-tags, etc.). Call read tools, assert the returned text remains wrapped in the structural delimiters and that the delimiters themselves are never produced by captured content (escape `<` and `>` inside captured payloads or use rare delimiter strings).
 - **Projection-default tests:** assert `recondo_list_sessions(limit=20)` response stays under 32 KB on a seeded dataset of long-titled sessions, while `recondo_get_session(id)` for the same sessions can exceed it (validating the list/get split is doing its job).
 - **Catalog parity test:** snapshot the set of registered MCP tools against a manifest of `recondo-data` exported operations; CI fails on drift.
@@ -671,7 +670,7 @@ The implementation plan (next document) will sequence the work, but the rough or
 8. **`recondo-data`: new operations.** Land the seven new data-layer functions enumerated in the non-goals: `getTurnRawMetadata` and `getTurnRawChunk` (object-store byte access — chunked rather than truncated for single-record over-budget responses), plus the five analytical functions backing the new MCP tools: `compareTurns`, `findSimilarPrompts` (hash-only in v1; embedding-based fuzzy match deferred to v1.5), `relatedTurns`, `sessionEfficiency`, `toolCallStats`. Each follows the streaming-prep contracts from step 7 (returns `AsyncIterable<Item>` where list-shaped, accepts `AbortSignal`, emits the uniform list envelope). GraphQL resolvers and MCP tools each register their own thin adapter on top.
 
    *(Step 9 in earlier drafts was a credential-redaction module; that work is deferred from v1 — see "Security" section. The existing path-masking behavior in `placeholder-mask.ts` continues to work as it does today, having moved into `recondo-data` as part of step 7.)*
-10. **`mcp/` service scaffolding** — new top-level service, peer to `api/`. Owns its own `package.json`, `tsconfig.json`, build pipeline. Depends on `recondo-data`. Implements `@modelcontextprotocol/sdk` stdio server and audit logging. Builds the `recondo-mcp` binary. Adds `just mcp-test` recipe to run the integration test suite (no `just mcp-dev` — the MCP runs on demand when an agent connects).
+10. **`mcp/` service scaffolding** — new top-level service, peer to `api/`. Owns its own `package.json`, `tsconfig.json`, build pipeline. Depends on `recondo-data`. Implements `@modelcontextprotocol/sdk` Streamable HTTP server and audit logging. Builds the `recondo-mcp` binary and container image. Adds `just mcp-test` recipe to run the integration test suite.
 11. **MCP read-tool registration** — full coverage of query-module read operations; CI lint enforces parity.
 12. **MCP action tools** — gated behind `--allow-actions` and `--allow-destructive`. Action tools call mutation functions in the query module (or its sibling, the mutation module).
 13. **MCP prompt templates and resources.** Prompt templates: `summarize_my_week` (excludes calling session), `find_waste` (drives `find_similar_prompts` + `session_efficiency`; explicit "exact-match only in v1" caveat), `weekly_cost_report` (action; gated), `monitor_anomalies` (30s default cadence). Resources catalog in v1 is small — three immutable handles (`recondo://session/{id}` gated on `ended_at IS NOT NULL`, `recondo://turn/{id}`, `recondo://reports/{id}`). The `recondo_insights` tool covers what was previously a dynamic resource.
@@ -682,11 +681,11 @@ The implementation plan (next document) will sequence the work, but the rough or
 
 - `recondo-tui` opens to the realtime lens against a running stack and renders within 500ms. (No `recondo top` alias in v1; standalone binary only.)
 - TUI works without `RECONDO_API_KEY` set, leveraging the existing dev-mode bypass; setting `RECONDO_API_KEY=wrt_...` makes the TUI send Bearer auth and exercises the real auth path against `api_keys`.
-- MCP works without `RECONDO_API_KEY` in the agent's launch env, applying god-mode admin context; setting it exercises the real auth/scoping path.
+- MCP works in local fullstack without client credentials via `RECONDO_DEV_BYPASS=1`; sending a bearer key exercises the real auth/scoping path.
 - All metric cards from `/realtime` in the web dashboard render with matching values within one 5-second refresh cycle. (The TUI auto-renders whatever `RealtimeStats` exposes — adding a sixth metric on the dashboard side automatically appears in the TUI without a TUI code change.)
 - All v1 lenses (`d`/`s`/`c`/`a`) are reachable, populate from the API, and don't crash on empty/error states.
 - Command palette `:` and fuzzy search `/` work in every lens.
-- `recondo-mcp` binary builds from `mcp/` and registers cleanly with Claude Code (verified by spawning it via the registration JSON snippet against a running stack).
+- `recondo-mcp` binary and container build from `mcp/` and register cleanly with Claude Code via a Streamable HTTP registration JSON snippet against a running stack.
 - Every read function exported from the query module has a corresponding registered MCP read-tool (or an explicit opt-out annotation). CI lints this 1:1 mapping. The same read functions back the GraphQL resolvers, so dashboard/TUI and MCP cannot drift apart.
 - The MCP server does not perform HTTP calls into the API's GraphQL endpoint at any point. Tool handlers import query-module functions and call them as Node functions.
 - No registered MCP tool — read or action, default or `--allow-actions`-gated — mutates a captured record. CI lint enforces this by inspecting each action tool's call target: tools whose underlying `recondo-data` operation writes to `sessions`, `turns`, `tool_calls`, `captures`, or `audit_log` tables fail the lint. Audit-record immutability is a tested property, not just a doc claim.

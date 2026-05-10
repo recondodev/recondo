@@ -186,6 +186,7 @@ Codex is a Rust binary — it uses `CODEX_CA_CERTIFICATE` (not `NODE_TLS_REJECT_
 - **Language:** Rust (gateway), TypeScript (API/dashboard — future)
 - **Storage:** SQLite (dev) → PostgreSQL (prod)
 - **Data dir:** `~/.recondo/` (objects, CA certs, captures, SQLite DB)
+- **Data layer:** `@recondo/data` (workspace package at `packages/recondo-data/`) — see `api/src/resolvers/README.md` for the resolver-adapter pattern.
 
 ### Gateway module map
 

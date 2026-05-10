@@ -5,7 +5,7 @@
  * POST /v1/usage/spend-anomalies/evaluate — trigger webhook dispatch + anomaly_events record
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 const ANOMALY_THRESHOLD_MULTIPLIER = 3;

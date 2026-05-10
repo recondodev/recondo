@@ -27,15 +27,19 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /usr/src/recondo
 
 # Copy manifests first for layer caching. The workspace Cargo.toml +
-# Cargo.lock live at the repo root; both workspace members (gateway and
-# xtask) have their own per-crate Cargo.toml. Cargo requires every
-# workspace member's manifest + source to resolve the workspace, even
-# when only one crate is being built.
+# Cargo.lock live at the repo root; every workspace member (gateway,
+# tui, xtask) has its own per-crate Cargo.toml. Cargo refuses to load
+# the workspace if any member manifest is missing, even when only one
+# crate is being built.
 COPY Cargo.toml Cargo.lock ./
 COPY gateway/Cargo.toml ./gateway/
+COPY tui/Cargo.toml ./tui/
 COPY xtask/Cargo.toml ./xtask/
 
-# Copy source for both workspace members
+# Source for the crates that participate in the gateway build. The tui
+# crate is a workspace member but is not built here, so its source is
+# not copied — its manifest alone is enough to satisfy workspace
+# resolution.
 COPY gateway/src ./gateway/src
 COPY xtask/src ./xtask/src
 

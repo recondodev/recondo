@@ -876,7 +876,7 @@ The package is published as `@recondo/data` in the workspace; the `workspace:*` 
   /**
    * Look up an API key by its raw token (without "Bearer " prefix).
    *
-   * Callable from any consumer (API HTTP middleware, MCP stdio handshake).
+   * Callable from any consumer (API HTTP middleware, MCP HTTP auth handshake).
    * Returns null if the key is absent, malformed, unknown, or revoked.
    *
    * Per spec § "Streaming preparation" commitment 4: accepts an optional

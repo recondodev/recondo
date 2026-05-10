@@ -8,7 +8,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { authenticateRequest } from "../auth.js";
+import { authenticateRequest } from "@recondo/data";
 import { logAuditEntry } from "../audit.js";
 import { checkRateLimit } from "../ratelimit.js";
 import { getSourceIp, handleRestEndpoint } from "../middleware/rest-helpers.js";

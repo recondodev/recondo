@@ -989,16 +989,29 @@ async fn multiple_requests_through_tunnel_produce_multiple_captures() {
     let mut resp2_buf = vec![0u8; 8192];
     let _ = tls_stream.read(&mut resp2_buf);
 
-    // Give capture pipeline time to process both
-    tokio::time::sleep(Duration::from_millis(2000)).await;
-
-    // Verify multiple captures were produced
+    // Poll for the capture pipeline to flush both pairs to disk. The pipeline
+    // is async, so a fixed sleep races slower CI runners. Bail out as soon as
+    // both directories show >= 2 files, or after a generous deadline.
     let req_objects_dir = data_dir.join("objects").join("req");
-    let req_count = if req_objects_dir.exists() {
-        walkdir_count(&req_objects_dir)
-    } else {
-        0
-    };
+    let captures_dir = data_dir.join("captures");
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    let (mut req_count, mut capture_count) = (0usize, 0usize);
+    while std::time::Instant::now() < deadline {
+        req_count = if req_objects_dir.exists() {
+            walkdir_count(&req_objects_dir)
+        } else {
+            0
+        };
+        capture_count = if captures_dir.exists() {
+            walkdir_count(&captures_dir)
+        } else {
+            0
+        };
+        if req_count >= 2 && capture_count >= 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert!(
         req_count >= 2,
@@ -1006,13 +1019,6 @@ async fn multiple_requests_through_tunnel_produce_multiple_captures() {
          Found {}. The gateway must capture each request/response pair independently.",
         req_count
     );
-
-    let captures_dir = data_dir.join("captures");
-    let capture_count = if captures_dir.exists() {
-        walkdir_count(&captures_dir)
-    } else {
-        0
-    };
 
     assert!(
         capture_count >= 2,

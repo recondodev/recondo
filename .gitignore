@@ -13,6 +13,10 @@ dist/
 .env
 .env.*
 
+# pnpm
+.pnpm-store/
+pnpm-debug.log*
+
 # Python
 __pycache__/
 *.pyc
@@ -37,3 +41,6 @@ docker/ca-certs/*.crt
 
 # Claude Code runtime scratch (session locks, scheduled-task state)
 .claude/
+
+# Superpowers local brainstorming state
+.superpowers/

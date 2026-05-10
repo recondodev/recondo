@@ -15,7 +15,7 @@
  * risk level, not the incidental subject ("auth module"). See classifyRiskLevel JSDoc.
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 /**

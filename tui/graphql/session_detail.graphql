@@ -1,0 +1,23 @@
+query SessionDetail($id: ID!) {
+  session(id: $id) {
+    id
+    startedAt
+    endedAt
+    model
+    framework
+    provider
+    totalTurns
+    totalCostUsd
+    totalTokens
+    turns {
+      id
+      sequenceNum
+      timestamp
+      model
+      inputTokens
+      outputTokens
+      costUsd
+      toolCallCount
+    }
+  }
+}

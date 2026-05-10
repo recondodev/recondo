@@ -1,0 +1,8 @@
+query DailySpend($days: Int) {
+  dailySpend(days: $days) {
+    name
+    costUsd
+    percentage
+    count
+  }
+}

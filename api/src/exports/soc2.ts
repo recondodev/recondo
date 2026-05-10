@@ -12,7 +12,7 @@
  * - metadata: report generation info
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 // N5 fix: Soc2Request interface removed — input validation is done

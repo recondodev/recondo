@@ -7,7 +7,7 @@
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { closePool } from "./db.js";
+import { closePool } from "@recondo/data";
 import { startViewRefreshScheduler, stopViewRefreshScheduler } from "./usage/scheduler.js";
 import { healthRoutes } from "./routes/health.js";
 import { graphqlRoutes } from "./routes/graphql.js";

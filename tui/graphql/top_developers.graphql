@@ -1,0 +1,15 @@
+query TopDevelopers($limit: Int, $offset: Int, $period: Period) {
+  topDevelopers(limit: $limit, offset: $offset, period: $period) {
+    total
+    limit
+    offset
+    items {
+      accountUuid
+      sessionCount
+      totalTokens
+      totalCostUsd
+      favoriteModel
+      lastActive
+    }
+  }
+}

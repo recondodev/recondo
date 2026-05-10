@@ -1,0 +1,58 @@
+name: Docs CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mcp/src/tools/**'
+      - 'mcp/src/server.ts'
+      - 'mcp/scripts/generate-tool-catalog.ts'
+      - 'docs/site/mcp/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mcp/src/tools/**'
+      - 'mcp/src/server.ts'
+      - 'mcp/scripts/generate-tool-catalog.ts'
+      - 'docs/site/mcp/**'
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job: Tool Catalog Check
+  # ------------------------------------------------------------------
+  # Ensures the auto-generated tool-catalog.md is up to date.
+  # Run the generation script and diff against the checked-in version.
+  # If diverged, the PR reviewer needs to run `just docs-tool-catalog`
+  # and commit the updated file.
+  tool-catalog-check:
+    name: Tool Catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: taiki-e/install-action@just
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @recondo/data
+        run: pnpm --filter @recondo/data build
+
+      - name: Build MCP
+        run: pnpm --filter recondo-mcp build
+
+      - name: Generate and check tool catalog
+        run: just docs-tool-catalog-check

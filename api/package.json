@@ -19,6 +19,7 @@
     "@as-integrations/fastify": "^3.1.0",
     "@aws-sdk/client-s3": "^3.1041.0",
     "@fastify/cors": "^11.2.0",
+    "@recondo/data": "workspace:*",
     "dataloader": "^2.2.3",
     "fastify": "^5.8.2",
     "graphql": "^16.9.0",

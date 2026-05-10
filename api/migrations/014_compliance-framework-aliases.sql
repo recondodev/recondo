@@ -1,0 +1,9 @@
+-- Migration: 014_compliance-framework-aliases.sql
+--
+-- Deprecated by 015_compliance-frameworks-short-ids.sql.
+--
+-- The original v1 draft inserted duplicate short-id framework aliases
+-- (`soc2`, `iso42001`, `euai`, `nist`) alongside the seeded
+-- `seed-fw-*` rows. That created two IDs for one framework. Keep this
+-- numbered file as a no-op so migration numbering stays contiguous;
+-- the real reconciliation happens in migration 015.

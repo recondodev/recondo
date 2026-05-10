@@ -10,7 +10,7 @@
  *        delivery_method, last_run_at, next_run_at, created_at)
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 const VALID_FREQUENCIES = ["weekly", "monthly"] as const;

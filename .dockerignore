@@ -1,0 +1,17 @@
+# Build artifacts and dependency directories. These would otherwise be
+# uploaded to the Docker daemon as build context (gateway/target alone
+# is ~3.6 GB) and rebuilt inside the image anyway.
+node_modules
+**/node_modules
+gateway/target
+target
+
+# Local dev state — never wanted in any image.
+.git
+.recondo
+.DS_Store
+
+# Editor / OS noise
+.vscode
+.idea
+*.swp

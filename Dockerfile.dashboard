@@ -18,21 +18,32 @@ RUN set -eu; \
     if [ -s /etc/ssl/recondo/bundle.pem ]; then echo "Installed corporate CA certificates"; fi
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/recondo/bundle.pem
 
-COPY dashboard/package.json dashboard/package-lock.json* ./
-RUN npm install
+# pnpm — this repo is a pnpm workspace; `pnpm install --frozen-lockfile`
+# expects the lockfile to align with the full workspace manifest set.
+RUN npm install -g pnpm@10
 
-COPY dashboard/ ./
+# Workspace manifests for cache-friendly install layer.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY api/package.json ./api/
+COPY dashboard/package.json ./dashboard/
+COPY packages/recondo-data/package.json ./packages/recondo-data/
+
+# `--filter recondo-dashboard...` installs only what dashboard needs (its own
+# deps plus any workspace packages it imports — currently none).
+RUN pnpm install --frozen-lockfile --filter "recondo-dashboard..."
+
+COPY dashboard/ ./dashboard/
 
 # API URL is baked in at build time via Vite env
 ARG VITE_API_URL=http://localhost:4000
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm run build
+RUN pnpm --filter recondo-dashboard build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dashboard/dist /usr/share/nginx/html
 
 # SPA routing: all paths serve index.html (let React Router handle it)
 RUN echo 'server { \

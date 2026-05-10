@@ -3,7 +3,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { checkDatabaseHealth } from "../db.js";
+import { checkDatabaseHealth } from "@recondo/data";
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/health", async (_request, reply) => {

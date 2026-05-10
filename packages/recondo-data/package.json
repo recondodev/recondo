@@ -1,0 +1,36 @@
+{
+  "name": "@recondo/data",
+  "version": "0.0.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "Shared data-access layer for Recondo (API + MCP)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node scripts/check-no-transport-imports.mjs && vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.test.json",
+    "lint:arch": "node scripts/check-no-transport-imports.mjs",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1041.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.14.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "expect-type": "^1.0.0",
+    "testcontainers": "^11.14.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

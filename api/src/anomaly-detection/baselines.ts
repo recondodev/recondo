@@ -8,7 +8,7 @@
  * turn/session/tool_call data. Stores results in agent_baselines table.
  */
 
-import { getPool } from "../db.js";
+import { getPool } from "@recondo/data";
 import type { ApiKeyInfo } from "../context.js";
 
 // ---------------------------------------------------------------------------

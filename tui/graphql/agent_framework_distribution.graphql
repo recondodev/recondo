@@ -1,0 +1,8 @@
+query AgentFrameworkDistribution($period: Period, $from: DateTime, $to: DateTime) {
+  agentFrameworkDistribution(period: $period, from: $from, to: $to) {
+    name
+    costUsd
+    percentage
+    count
+  }
+}

@@ -1,10 +1,12 @@
 # MCP Server v1 Implementation Plan
 
+> **Architecture correction (2026-05-07):** `recondo-mcp` is a long-running remote Streamable HTTP service at `/mcp`, deployed alongside the API in fullstack. Do not implement a local-spawn MCP transport from older drafts; use the current design spec's MCP process model.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `recondo-mcp` — a Model Context Protocol server that exposes Recondo's captured-data analytics to AI agents (Claude Code, Cursor, Goose, etc.) via stdio transport. Read tools cover every `recondo-data` read function (~24 tools, cap 25); action tools cover governance mutations (gated behind `--allow-actions`); captured records remain immutable; captured-content envelope wrapping (XML delimiters) is the load-bearing prompt-injection mitigation. Credential redaction is deferred from v1 (per spec).
+**Goal:** Ship `recondo-mcp` — a Model Context Protocol server that exposes Recondo's captured-data analytics to AI agents (Claude Code, Cursor, Goose, etc.) via remote Streamable HTTP transport. Read tools cover every `recondo-data` read function (~24 tools, cap 25); action tools cover governance mutations (gated behind `--allow-actions`); captured records remain immutable; captured-content envelope wrapping (XML delimiters) is the load-bearing prompt-injection mitigation. Credential redaction is deferred from v1 (per spec).
 
-**Architecture:** New top-level `mcp/` workspace service, peer of `api/`. Depends on `packages/recondo-data`. Implements `@modelcontextprotocol/sdk` server with stdio transport. Tool handlers are thin adapters over data-layer functions. All returned captured content uses the role-explicit response envelope with structural XML delimiters (load-bearing prompt-injection mitigation).
+**Architecture:** New top-level `mcp/` workspace service, peer of `api/`. Depends on `packages/recondo-data`. Implements `@modelcontextprotocol/sdk` server with Streamable HTTP transport. Tool handlers are thin adapters over data-layer functions. All returned captured content uses the role-explicit response envelope with structural XML delimiters (load-bearing prompt-injection mitigation).
 
 **Tech Stack:** TypeScript, `@modelcontextprotocol/sdk`, the `packages/recondo-data` workspace package (Plans B + C), existing test stack.
 
@@ -16,7 +18,7 @@
 
 Implementation is bounded by the spec at `/Users/andmer/Projects/recondo/docs/superpowers/specs/2026-05-04-tui-and-mcp-design.md`, sections:
 
-- "MCP server design — `recondo-mcp`" (lines 255–278) — process model, stdio transport, no `mcp-dev` recipe.
+- "MCP server design — `recondo-mcp`" (lines 255–278) — remote Streamable HTTP service process model.
 - "Auth model — MCP" (lines 279–320) — `RECONDO_DEV_BYPASS` posture, `RECONDO_API_KEY`, `recondo-mcp config` subcommand.
 - "Design principle: full coverage of `recondo-data`" (321–328) — CI parity lint targets `recondo-data` exports.
 - "Read tool surface" (329–398) — the 24-tool catalog with cap 25.
@@ -49,8 +51,7 @@ mcp/
     bin/
       recondo-mcp.ts                  # CLI entry: parses argv, dispatches `serve` (default) or `config` subcommand
     server.ts                         # createServer(opts) — wires SDK Server, transports, handlers
-    transport/
-      stdio.ts                        # stdio transport bootstrap
+    http.ts                           # Streamable HTTP transport bootstrap
     config/
       env.ts                          # loadEnvConfig(): DATABASE_URL, RECONDO_OBJECT_STORE_PATH, RECONDO_API_KEY, dev-bypass flags
       flags.ts                        # parseFlags(argv): {allowActions, allowDestructive, hidePii, scopeFrameworks, scopeProjects}
@@ -118,11 +119,11 @@ mcp/
       turn.ts                         # recondo://turn/{id}
       report.ts                       # recondo://reports/{id}
     util/
-      logger.ts                       # stderr-only structured logging (stdout is reserved for stdio transport)
+      logger.ts                       # stderr-only structured logging
       json.ts                         # safeStringify (cycle-tolerant), byte-length helpers
   tests/
     helpers/
-      spawnMcp.ts                     # spawn binary, JSON-RPC stdio harness with request/response correlation
+      spawnMcp.ts                     # launch service, Streamable HTTP harness with request/response correlation
       seed.ts                         # seed test DB with fixtures (sessions, turns, secrets, injection strings)
       mockRecondoData.ts              # in-process recondo-data fake for unit tests (parity test uses real package)
     unit/
@@ -298,7 +299,7 @@ mcp-lint-parity:
 
 ## Task 3: Stderr-only structured logger
 
-The MCP stdio transport reserves stdout for JSON-RPC frames; any stray write to stdout corrupts the protocol stream. Establish the logger first so every later module uses it.
+The long-running MCP service writes normal logs to stderr so stdout remains reserved for explicit CLI output such as `config`. Establish the logger first so every later module uses it.
 
 **RED**
 
@@ -805,7 +806,7 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
   }
   ```
 
-  Note on the SDK call shape: `Server.tool(name, description, schema, handler)` matches the `@modelcontextprotocol/sdk` v1.x stdio API. If the installed SDK version uses `setRequestHandler(ListToolsRequestSchema, …)` instead, adapt: the registry layer calls `server.setRequestHandler(CallToolRequestSchema, dispatcher)` and the dispatcher routes by `name`. The shape that *matters for this plan* is: each tool ships its name, description, Zod input schema, and handler; the wrapper applies audit logging and error handling identically.
+  Note on the SDK call shape: `Server.tool(name, description, schema, handler)` matches the `@modelcontextprotocol/sdk` server registration API used by the Streamable HTTP service. If the installed SDK version uses `setRequestHandler(ListToolsRequestSchema, …)` instead, adapt: the registry layer calls `server.setRequestHandler(CallToolRequestSchema, dispatcher)` and the dispatcher routes by `name`. The shape that *matters for this plan* is: each tool ships its name, description, Zod input schema, and handler; the wrapper applies audit logging and error handling identically.
 
 **REFACTOR / VERIFY**
 
@@ -813,68 +814,47 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
 
 ---
 
-## Task 9: Server bootstrap, stdio transport, and binary entry
+## Task 9: Server bootstrap, Streamable HTTP transport, and binary entry
 
 **RED**
 
 - [ ] Create `mcp/tests/integration/bootstrap.test.ts` (extending the earlier file). Cover:
-  - Spawning the binary with `RECONDO_DEV_BYPASS=1`, `DATABASE_URL=...`, `RECONDO_OBJECT_STORE_PATH=...` produces a process that responds to an `initialize` JSON-RPC request on stdio with a valid initialize-result envelope (capabilities advertise `tools` and `prompts` and `resources`).
-  - Spawning the binary with no env (no `DATABASE_URL`) exits non-zero with a structured error on stderr.
+  - Starting the binary with `RECONDO_DEV_BYPASS=1`, `DATABASE_URL=...`, and object-store config produces a long-running HTTP service that responds to an `initialize` JSON-RPC request at `/mcp` with a valid initialize-result envelope (capabilities advertise `tools` and `prompts` and `resources`).
+  - Starting the binary with no env (no `DATABASE_URL`) exits non-zero with a structured error on stderr.
 
 - [ ] Create `mcp/tests/helpers/spawnMcp.ts`:
 
   ```ts
   import { spawn, type ChildProcess } from "node:child_process";
-  import { once } from "node:events";
 
   export interface McpProcess {
     proc: ChildProcess;
-    send(req: object): Promise<unknown>;
+    request(method: string, params?: unknown): Promise<unknown>;
     close(): Promise<void>;
   }
 
   export async function spawnMcp(args: string[] = [], env: NodeJS.ProcessEnv = {}): Promise<McpProcess> {
     const proc = spawn("node", ["dist/bin/recondo-mcp.js", ...args], {
       cwd: new URL("../..", import.meta.url).pathname,
-      env: { ...process.env, ...env },
-      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...env, RECONDO_MCP_HOST: "127.0.0.1", RECONDO_MCP_PORT: "0" },
     });
 
-    let buf = "";
-    const pending = new Map<number, (resp: unknown) => void>();
-    proc.stdout?.on("data", (chunk: Buffer) => {
-      buf += chunk.toString("utf8");
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        try {
-          const msg = JSON.parse(line);
-          if (typeof msg.id === "number" && pending.has(msg.id)) {
-            pending.get(msg.id)!(msg);
-            pending.delete(msg.id);
-          }
-        } catch {
-          // notification or partial; ignore for now
-        }
-      }
-    });
+    // Wait for /healthz, initialize at /mcp, capture MCP-Session-Id,
+    // then POST JSON-RPC requests with that session header.
 
     let nextId = 1;
     return {
       proc,
-      send(req) {
+      request(method, params) {
         const id = nextId++;
-        const payload = JSON.stringify({ jsonrpc: "2.0", id, ...req }) + "\n";
-        return new Promise((resolve) => {
-          pending.set(id, resolve);
-          proc.stdin?.write(payload);
-        });
+        return fetch("http://127.0.0.1:<port>/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+        }).then((res) => res.json());
       },
       async close() {
         proc.kill();
-        await once(proc, "exit").catch(() => undefined);
       },
     };
   }
@@ -882,14 +862,13 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
 
 **GREEN**
 
-- [ ] Create `mcp/src/transport/stdio.ts`:
+- [ ] Create `mcp/src/http.ts` with the Streamable HTTP service:
 
   ```ts
-  import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+  import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-  export function createStdioTransport(): StdioServerTransport {
-    return new StdioServerTransport();
-  }
+  // Mount /healthz and /mcp, allocate sessions with MCP-Session-Id,
+  // and connect a fresh McpServer instance per initialized session.
   ```
 
 - [ ] Create `mcp/src/server.ts`:
@@ -902,7 +881,7 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
   import { registerAllTools } from "./tools/register.js";
   import { registerAllPrompts } from "./prompts/register.js";
   import { registerAllResources } from "./resources/register.js";
-  import { createStdioTransport } from "./transport/stdio.js";
+  import { startHttpServer } from "./http.js";
   import { logger } from "./util/logger.js";
   import * as Data from "@recondo/data";
 
@@ -923,8 +902,7 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
     registerAllPrompts(server, ctx);
     registerAllResources(server, ctx);
 
-    const transport = createStdioTransport();
-    await server.connect(transport);
+    await startHttpServer({ server, host: env.mcpHost, port: env.mcpPort });
     logger.info("recondo-mcp ready", {
       allowActions: flags.allowActions,
       allowDestructive: flags.allowDestructive,
@@ -977,7 +955,7 @@ This task establishes the canonical message envelope, raw-byte envelope, list en
 
 **RED**
 
-- [ ] Create `mcp/tests/integration/auth_devbypass.test.ts` (will be exercised after seed exists). Asserts that calling `recondo_list_sessions` over stdio returns `{ items: [], next_offset: null, truncated: false, stream_id: null, is_final: true }` against an empty DB.
+- [ ] Create `mcp/tests/integration/auth_devbypass.test.ts` (will be exercised after seed exists). Asserts that calling `recondo_list_sessions` over Streamable HTTP returns `{ items: [], next_offset: null, truncated: false, stream_id: null, is_final: true }` against an empty DB.
 
 **GREEN**
 
@@ -2225,10 +2203,10 @@ This is the CI lint enforcing 1:1 parity between `recondo-data`'s exported read 
 **RED**
 
 - [ ] Create `mcp/tests/unit/registration.test.ts`. Cover:
-  - `emitRegistrationJson({client: "claude-code"})` returns valid JSON with `mcpServers.recondo.command = "recondo-mcp"`, `env.DATABASE_URL` populated from process.env, NO `RECONDO_API_KEY` field.
-  - `emitRegistrationJson({client: "cursor"})` returns Cursor-flavored JSON.
-  - `emitRegistrationJson({client: "goose"})` returns Goose-flavored JSON.
-  - `emitRegistrationJson({client: "claude-code", scopedProjectId: "proj_xyz"})` calls `dataLayer.mintScopedKey({projectId: "proj_xyz"})` and includes the resulting key in `env.RECONDO_API_KEY`.
+  - `emitRegistrationJson({client: "claude-code"})` returns valid JSON with `mcpServers.recondo.type = "streamable-http"` and `url` populated from `RECONDO_MCP_URL` or the local `RECONDO_MCP_PORT` default, with no command/env launch block.
+  - `emitRegistrationJson({client: "cursor"})` returns the same remote server shape in Cursor's config wrapper.
+  - `emitRegistrationJson({client: "goose"})` returns a Goose extension pointing at the remote Streamable HTTP URL.
+  - `emitRegistrationJson({client: "claude-code", scopedProjectId: "proj_xyz"})` calls `dataLayer.mintScopedKey({projectId: "proj_xyz"})` and includes the resulting key as an `Authorization: Bearer ...` header.
 
 **GREEN**
 
@@ -2243,13 +2221,17 @@ This is the CI lint enforcing 1:1 parity between `recondo-data`'s exported read 
   }
 
   export async function emitRegistrationJson(opts: RegistrationOptions): Promise<string> {
-    const env: Record<string, string> = {};
-    if (process.env.DATABASE_URL) env.DATABASE_URL = process.env.DATABASE_URL;
-    if (process.env.RECONDO_OBJECT_STORE_PATH) env.RECONDO_OBJECT_STORE_PATH = process.env.RECONDO_OBJECT_STORE_PATH;
+    const url = process.env.RECONDO_MCP_URL ?? `http://localhost:${process.env.RECONDO_MCP_PORT ?? "4001"}/mcp`;
+    const headers: Record<string, string> = {};
     if (opts.scopedProjectId) {
       const key = await mintScopedKey({ projectId: opts.scopedProjectId });
-      env.RECONDO_API_KEY = key.token;
+      headers.Authorization = `Bearer ${key.token}`;
     }
+    const server = {
+      type: "streamable-http",
+      url,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    };
 
     switch (opts.client) {
       case "claude-code":
@@ -2257,10 +2239,7 @@ This is the CI lint enforcing 1:1 parity between `recondo-data`'s exported read 
         return JSON.stringify(
           {
             mcpServers: {
-              recondo: {
-                command: "recondo-mcp",
-                env,
-              },
+              recondo: server,
             },
           },
           null,
@@ -2271,9 +2250,9 @@ This is the CI lint enforcing 1:1 parity between `recondo-data`'s exported read 
           {
             extensions: {
               recondo: {
-                type: "stdio",
-                cmd: "recondo-mcp",
-                env,
+                name: "recondo",
+                enabled: true,
+                ...server,
               },
             },
           },
@@ -2754,7 +2733,7 @@ This is the load-bearing security test specified in the plan brief.
 
 **RED**
 
-- [ ] Create `mcp/tests/integration/registration_e2e.test.ts`. Run `recondo-mcp config claude-code`, parse the output as JSON, spawn `recondo-mcp` with the env block from the JSON, perform `initialize` + `tools/list` + `tools/call recondo_usage_summary`, assert all succeed.
+- [ ] Create `mcp/tests/integration/registration_e2e.test.ts`. Start the long-running service on an ephemeral HTTP port, run `RECONDO_MCP_URL=<base>/mcp recondo-mcp config claude-code`, parse the output as JSON, verify it points at the running remote URL, then perform `initialize` + `tools/list` + `tools/call recondo_usage_summary` against that URL and assert all succeed.
 
 **GREEN**
 
@@ -2792,7 +2771,7 @@ This is the load-bearing security test specified in the plan brief.
 ## Notes for the implementing agent
 
 - **`recondo-data` API names.** This plan assumes Plan B exports the data-layer functions under the names used in the catalog parity table (Task 25). If actual names differ, search-and-replace in one pass after Task 1; do not let drifted names propagate through tool files.
-- **`@modelcontextprotocol/sdk` version.** The SDK API is evolving. The shapes shown here (`Server.tool(name, description, schema, handler)`, `Server.prompt(...)`, `Server.resource(...)`) match v1.x stdio surface. If the installed version uses the lower-level `setRequestHandler(CallToolRequestSchema, dispatcher)` style, swap the registration plumbing in `mcp/src/tools/register.ts` and `mcp/src/prompts/register.ts` and `mcp/src/resources/register.ts` only — the tool definitions and contexts do not change.
-- **Stdout discipline.** No code in `mcp/src/` writes to stdout except the MCP transport itself and the `recondo-mcp config` subcommand. Use `logger` (stderr) everywhere. CI should grep `mcp/src/` for `console.log` and `process.stdout.write` and fail the build on any match outside `bin/recondo-mcp.ts` (the `config` branch).
+- **`@modelcontextprotocol/sdk` version.** The SDK API is evolving. The shapes shown here (`Server.tool(name, description, schema, handler)`, `Server.prompt(...)`, `Server.resource(...)`) match the server registration surface used behind Streamable HTTP. If the installed version uses the lower-level `setRequestHandler(CallToolRequestSchema, dispatcher)` style, swap the registration plumbing in `mcp/src/tools/register.ts` and `mcp/src/prompts/register.ts` and `mcp/src/resources/register.ts` only — the tool definitions and contexts do not change.
+- **Stdout discipline.** No code in `mcp/src/` writes to stdout except the `recondo-mcp config` subcommand. The Streamable HTTP service writes normal logs to stderr. CI should grep `mcp/src/` for `console.log` and `process.stdout.write` and fail the build on any match outside `bin/recondo-mcp.ts` (the `config` branch).
 - **Tests use a real Postgres.** All integration tests assume `DATABASE_URL` and `RECONDO_OBJECT_STORE_PATH` point at a live test DB. The CI runner provisions these via `just dev-infra` (per CLAUDE.md). Each integration test cleans up after itself.
 - **Spec change handling.** If the spec is amended during implementation (e.g., a new tool is added to `recondo-data`), the parity lint test will fail first, signaling the need to either register a new MCP tool or add an opt-out annotation. Do not silence the lint.

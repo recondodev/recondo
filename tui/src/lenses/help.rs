@@ -1,0 +1,31 @@
+use crate::ui::theme;
+use ratatui::{layout::Rect, widgets::Paragraph, Frame};
+
+pub struct HelpOverlay;
+
+impl HelpOverlay {
+    pub fn draw(&self, f: &mut Frame<'_>, area: Rect) {
+        let body = "\
+d   Realtime Monitor
+s   Sessions
+c   Cost & Usage
+a   Agent Analytics
+A   Audit Trail
+:   Command palette
+/   Fuzzy search
+?   This help
+q   Quit
+H/L Browser-style back/forward
+*   Pin tab        1-9 jump to pinned tab
+o/O Sort cycle (forward/reverse)
+f   Filter (cycle or modal, lens-specific)
+g   Group-by cycle (Cost lens only)
+Tab Cycle focus across panels";
+        f.render_widget(
+            Paragraph::new(body)
+                .style(theme::body_style())
+                .block(theme::panel_block("Help")),
+            area,
+        );
+    }
+}

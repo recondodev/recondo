@@ -1,0 +1,14 @@
+query TopRepositories($limit: Int, $offset: Int, $period: Period) {
+  topRepositories(limit: $limit, offset: $offset, period: $period) {
+    total
+    limit
+    offset
+    items {
+      repository
+      sessionCount
+      branchCount
+      totalCostUsd
+      primaryFramework
+    }
+  }
+}
