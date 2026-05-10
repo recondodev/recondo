@@ -43,8 +43,8 @@ jobs:
         with:
           version: 10
 
-      - name: Install MCP dependencies
-        run: pnpm --filter recondo-mcp install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build MCP
         run: pnpm --filter recondo-mcp build
