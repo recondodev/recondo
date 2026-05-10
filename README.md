@@ -8,7 +8,7 @@
 
 Self-hosted. Multi-vendor. Zero touch.
 
-Run on-prem or in your own cloud account (AWS Terraform module included).
+Runs wherever you do — bare metal, Docker, Kubernetes (Helm chart included), or your own AWS account (Terraform module included). On-prem or in your cloud.
 
 Recondo sits on the network path between coding agents (Claude Code, Codex, Cursor, Aider, Gemini-based agents) and their LLM providers. Every request and response flows through it — visible in one place, controllable at the wire. Cap spend per team, redact secrets before they leave the network, route or block by provider, model, or developer.
 
