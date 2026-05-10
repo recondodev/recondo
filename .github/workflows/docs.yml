@@ -43,6 +43,8 @@ jobs:
         with:
           version: 10
 
+      - uses: taiki-e/install-action@just
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
