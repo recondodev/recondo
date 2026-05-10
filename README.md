@@ -79,7 +79,7 @@ Coding Agent (Claude Code / Codex)
     Gemini
 ```
 
-**Language:** Rust (gateway + CLI), TypeScript (API + dashboard)
+**Language:** Rust (gateway + CLI + TUI), TypeScript (API + dashboard + MCP server + `@recondo/data` package)
 **Storage:** SQLite (dev) / PostgreSQL (prod)
 **Object Store:** Local filesystem (dev) / S3 with Object Lock (prod)
 **Encryption:** KMS customer-managed keys (prod)
@@ -221,6 +221,36 @@ just recondo ca export cert.pem  # Export CA cert to file
 just recondo ca revoke         # Remove CA from system trust store
 ```
 
+## TUI
+
+Terminal UI for live audit + spend visibility against a running gateway. Five lenses:
+
+| Lens | Purpose |
+|------|---------|
+| **Realtime** | Live gateway throughput, provider mix, recent turns |
+| **Sessions** | Audit trail by user/device/account with drill-to-turn |
+| **Cost** | Token spend by model/provider, daily trends, sparklines |
+| **Agents** | Agent-framework distribution, top developers, repo hotspots |
+| **Audit** | Compliance audit trail with GraphQL polling |
+
+```bash
+just tui-build                 # build the recondo-tui crate
+just tui                       # launch against the local API
+```
+
+See [`docs/site/tui/`](docs/site/tui/) for first-run, install, and keybinding reference.
+
+## MCP Server
+
+Model Context Protocol server (`recondo-mcp`) exposes the capture corpus to coding agents as 60+ tools — read paths (sessions, turns, search, compliance), action tools (gated by an injection-warning guard), 4 prompts, and 3 resources. Agents like Claude Code or Cursor connect via the MCP transport and introspect their own history.
+
+```bash
+just mcp-test                  # build + run MCP test suite
+just mcp-lint-parity           # catalog name-parity lint
+```
+
+Install guides: [Claude Code](docs/site/mcp/install-claude-code.md) · [Cursor](docs/site/mcp/install-cursor.md) · [Goose](docs/site/mcp/install-goose.md). Tool catalog: [`docs/site/mcp/tool-catalog.md`](docs/site/mcp/tool-catalog.md).
+
 ## Development
 
 ### Running Tests
@@ -353,6 +383,10 @@ recondo/
 │   │   ├── hash/             # SHA-256 hashing
 │   │   └── wal/              # Write-ahead log
 │   └── tests/                # 1,556 integration tests (1,530 default-feature + 44 testcontainer-gated)
+├── tui/                      # recondo-tui — terminal UI (Rust, ratatui + tokio)
+├── mcp/                      # recondo-mcp — Model Context Protocol server (TypeScript)
+├── packages/
+│   └── recondo-data/         # @recondo/data — shared data layer (queries, marshalling, transport)
 ├── api/                      # Fastify + Apollo GraphQL API (TypeScript)
 ├── dashboard/                # React + Vite dashboard (TypeScript)
 ├── compliance/               # Provider-compatibility / control-mapping reference docs
