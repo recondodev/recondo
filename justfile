@@ -89,6 +89,8 @@ default:
     @echo "Cleanup & Docs"
     @echo "  just clean            Remove build artifacts"
     @echo "  just doc              Build and open Rust docs in browser"
+    @echo "  just docs-tool-catalog      Generate: pnpm --filter recondo-mcp tsx scripts/generate-tool-catalog.ts > docs/site/mcp/tool-catalog.md"
+    @echo "  just docs-tool-catalog-check  CI check: pnpm --filter recondo-mcp tsx scripts/generate-tool-catalog.ts | diff -u docs/site/mcp/tool-catalog.md -"
 
 # Dev environment setup (run once after clone)
 setup: _setup-cargo
@@ -496,6 +498,14 @@ clean:
 # Build and open docs in browser
 doc:
     cd gateway && cargo doc --no-deps --open
+
+# Generate tool catalog markdown from MCP registry
+docs-tool-catalog:
+    cd mcp && pnpm exec tsx scripts/generate-tool-catalog.ts > ../docs/site/mcp/tool-catalog.md
+
+# CI check: ensure tool catalog is up to date
+docs-tool-catalog-check:
+    cd mcp && pnpm exec tsx scripts/generate-tool-catalog.ts | diff -u ../docs/site/mcp/tool-catalog.md - || (echo "tool-catalog.md is out of sync; run: just docs-tool-catalog" && exit 1)
 
 # ---------- TUI ----------
 

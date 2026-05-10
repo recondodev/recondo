@@ -14,6 +14,16 @@ Recondo sits on the network path between coding agents (Claude Code, Codex, Curs
 
 Under the hood, it's a transparent TLS-intercepting proxy: traffic is captured, hashed, compressed, and stored in a content-addressable object store, then structured into sessions, turns, and tool calls. No SDKs, no instrumentation, no developer workflow change.
 
+## Demo
+
+### TUI: cross-tool god-view (60s)
+
+<!-- video: docs/site/demos/assets/tui-60s.mp4 -->
+
+### MCP: your agents introspect their own history (30s)
+
+<!-- video: docs/site/demos/assets/mcp-30s.mp4 -->
+
 ## Why Teams Run It
 
 - **Network-Layer Capture** — Sit on the wire between agents and providers. No SDK swap, no agent code modification, no developer workflow change.
