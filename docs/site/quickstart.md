@@ -99,8 +99,8 @@ Keep this terminal available for the next step.
 Your agent (Claude Code) must trust the gateway's self-signed TLS certificate. The simplest way:
 
 ```bash
-# Add gateway CA to system trust store (one-time)
-just ca-install
+# Sync gateway CA to system trust store (one-time)
+just dev-trust
 ```
 
 **If behind a corporate TLS inspection firewall** (Zscaler, Blue Coat, Palo Alto):
@@ -215,7 +215,7 @@ Your agent didn't trust the gateway's self-signed certificate.
 
 ```bash
 # Did you run Step 3?
-just ca-install
+just dev-trust
 
 # Still broken? Set the fallback:
 NODE_TLS_REJECT_UNAUTHORIZED=0 claude

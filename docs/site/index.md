@@ -10,7 +10,7 @@ Your god-view across every coding agent on your network. One dashboard, one vant
 
 ## Get Started
 
-[Quickstart →](./quickstart.md) | [Install MCP →](./mcp/README.md)
+[Quickstart →](./quickstart.md) | [Install MCP →](./mcp/install.md)
 
 ---
 
